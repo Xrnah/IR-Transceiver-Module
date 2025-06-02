@@ -3,15 +3,10 @@
 #include <ESP8266WiFi.h>
 #include <ArduinoOTA.h>
 
-// ─────────────────────────────────────────────────────────────
-// 🔧 OTA Configuration Settings (can be moved to separate file)
-// ─────────────────────────────────────────────────────────────
-namespace OTAConfig {
-  constexpr const char* SSID       = "Test_SSID";
-  constexpr const char* PASSWORD   = "Test_Pass";
-  constexpr const char* HOSTNAME   = "OTA_NAME";
-  constexpr const char* OTA_PASS   = "Password!";
-}
+#include "OTA_setting.h" 
+  // Should contain the OTAConfig namespace
+  //  with SSID, PASSWORD, HOSTNAME, and OTA_PASS
+  //  defined as constexpr const char*
 
 // ─────────────────────────────────────────────
 // 📡 Initialize Wi-Fi Connection
