@@ -1,9 +1,11 @@
 #include "ACU_remote_encoder.h"
 
+// Constructor: initialize with AC unit signature (e.g., brand/protocol type)
 ACU_remote::ACU_remote(String signature)
   : signature(signature) {}
 
-// Setters
+// ====== State Setters ======
+// Individually set parts of the remote control state
 void ACU_remote::setFanSpeed(uint8_t speed) {
   state.fanSpeed = speed;
 }
@@ -20,6 +22,7 @@ void ACU_remote::setPowerState(bool on) {
   state.isOn = on;
 }
 
+// Set entire ACU state in one call
 void ACU_remote::setState(uint8_t fanSpeed, uint8_t temp, ACUMode mode, uint8_t louver, bool isOn) {
   state.fanSpeed = fanSpeed;
   state.temperature = temp;
@@ -28,35 +31,40 @@ void ACU_remote::setState(uint8_t fanSpeed, uint8_t temp, ACUMode mode, uint8_t 
   state.isOn = isOn;
 }
 
-// Getters
+// ====== State Getters ======
 bool ACU_remote::getPowerState() const {
   return state.isOn;
 }
+
 uint64_t ACU_remote::getLastCommand() const {
   return lastCommand;
 }
+
 ACUState ACU_remote::getState() const {
   return state;
 }
 
-// Encode command into 64-bit with complement
+// ====== Encode Command ======
+// Encodes current state into a 64-bit command with a 32-bit complement
+// Format: [command(32)] + [~command(32)]
 uint64_t ACU_remote::encodeCommand() {
   uint32_t command = 0;
-  command |= ((uint32_t)encodeSignature() << 28);
-  command |= (0b0000 << 24);  // Reserved
-  command |= (0b0000 << 20);  // Reserved
-  command |= ((uint32_t)encodeFanSpeed() << 16);
-  command |= ((uint32_t)encodeTemperature() << 12);
-  command |= ((uint32_t)encodeMode() << 8);
-  command |= (0b0000 << 4);  // Reserved
-  command |= encodeLouver();
 
-  uint32_t complement = ~command;
+  command |= ((uint32_t)encodeSignature() << 28);    // Signature (e.g., brand ID)
+  command |= (0b0000 << 24);                         // Reserved bits
+  command |= (0b0000 << 20);                         // Reserved bits
+  command |= ((uint32_t)encodeFanSpeed() << 16);     // Fan speed
+  command |= ((uint32_t)encodeTemperature() << 12);  // Temperature
+  command |= ((uint32_t)encodeMode() << 8);          // Mode + power state
+  command |= (0b0000 << 4);                          // Reserved bits
+  command |= encodeLouver();                         // Louver setting
+
+  uint32_t complement = ~command;                    // Calculate bitwise complement
   lastCommand = ((uint64_t)command << 32) | complement;
   return lastCommand;
 }
 
-// Static utility for binary string conversion
+// ====== Utility: Convert 64-bit to Binary String ======
 String ACU_remote::toBinaryString(uint64_t value, bool spaced) {
   String result = "";
   for (int i = 63; i >= 0; i--) {
@@ -66,7 +74,7 @@ String ACU_remote::toBinaryString(uint64_t value, bool spaced) {
   return result;
 }
 
-// JSON output of current state
+// ====== Serialize state to JSON string ======
 String ACU_remote::toJSON() const {
   String json = "{";
   json += "\"fanSpeed\":" + String(state.fanSpeed) + ",";
@@ -78,9 +86,9 @@ String ACU_remote::toJSON() const {
   return json;
 }
 
-// JSON input to encode
+// ====== Deserialize state from JSON string ======
 bool ACU_remote::fromJSON(const String& jsonString) {
-  JsonDocument doc;  // Use the updated type name
+  StaticJsonDocument<256> doc;  // ⚠️ Using deprecated type; see notes
   DeserializationError error = deserializeJson(doc, jsonString);
 
   if (error) {
@@ -89,7 +97,7 @@ bool ACU_remote::fromJSON(const String& jsonString) {
     return false;
   }
 
-  // Validate all fields using .is<T>()
+  // Validate and extract all required fields
   if (!doc["fanSpeed"].is<uint8_t>() ||
       !doc["temperature"].is<uint8_t>() ||
       !doc["mode"].is<const char*>() ||
@@ -98,32 +106,35 @@ bool ACU_remote::fromJSON(const String& jsonString) {
     return false;
   }
 
+  // Extract and convert values
   uint8_t fanSpeed = doc["fanSpeed"];
   uint8_t temp = doc["temperature"];
   String modeStr = doc["mode"].as<String>();
   uint8_t louver = doc["louver"];
   bool isOn = doc["isOn"];
 
+  // Convert mode string to enum
   ACUMode mode;
   if (modeStr == "auto") mode = ACUMode::AUTO;
   else if (modeStr == "cool") mode = ACUMode::COOL;
   else if (modeStr == "heat") mode = ACUMode::HEAT;
   else if (modeStr == "dry") mode = ACUMode::DRY;
   else if (modeStr == "fan") mode = ACUMode::FAN;
-  else return false;  // Invalid mode string
+  else return false;  // Unrecognized mode
 
   setState(fanSpeed, temp, mode, louver, isOn);
   return true;
 }
 
-// Private encode helpers
+// ====== Private Helpers for Encoding ======
+
+// Return protocol/brand-specific 4-bit identifier
 uint8_t ACU_remote::encodeSignature() const {
   if (signature == "MITSUBISHI_HEAVY_64") return 0b0101;
-  // Add more signatures if the brand follows the same 
-  //  binary structure.
-  return 0b0000;
+  return 0b0000;  // Default fallback
 }
 
+// Fan speed encoded as 4 bits
 uint8_t ACU_remote::encodeFanSpeed() const {
   switch (state.fanSpeed) {
     case 1: return 0b0010;
@@ -134,6 +145,7 @@ uint8_t ACU_remote::encodeFanSpeed() const {
   }
 }
 
+// Temperature encoding based on internal reverse-engineering of protocol
 uint8_t ACU_remote::encodeTemperature() const {
   switch (state.temperature) {
     case 18: return 0b0100;
@@ -153,21 +165,23 @@ uint8_t ACU_remote::encodeTemperature() const {
   }
 }
 
+// Encode mode and power state (LSB represents power)
 uint8_t ACU_remote::encodeMode() const {
   uint8_t base = 0;
   switch (state.mode) {
     case ACUMode::AUTO: base = 0b0001; break;
     case ACUMode::COOL: base = 0b0101; break;
     case ACUMode::HEAT: base = 0b0011; break;
-    case ACUMode::DRY: base = 0b1001; break;
-    case ACUMode::FAN: base = 0b1101; break;
+    case ACUMode::DRY:  base = 0b1001; break;
+    case ACUMode::FAN:  base = 0b1101; break;
     default: base = 0b0000; break;
   }
 
-  if (!state.isOn) base &= ~0b0001;  // Clear LSB if off
+  if (!state.isOn) base &= ~0b0001;  // If off, clear LSB (power off)
   return base;
 }
 
+// Encode louver position as 4-bit value
 uint8_t ACU_remote::encodeLouver() const {
   switch (state.louver) {
     case 1: return 0b0000;
@@ -178,13 +192,14 @@ uint8_t ACU_remote::encodeLouver() const {
   }
 }
 
+// Convert ACUMode enum to human-readable string
 String ACU_remote::modeToString(ACUMode mode) const {
   switch (mode) {
     case ACUMode::AUTO: return "auto";
     case ACUMode::COOL: return "cool";
     case ACUMode::HEAT: return "heat";
-    case ACUMode::DRY: return "dry";
-    case ACUMode::FAN: return "fan";
+    case ACUMode::DRY:  return "dry";
+    case ACUMode::FAN:  return "fan";
     default: return "invalid";
   }
 }
