@@ -1,45 +1,71 @@
+/*
+ * OTA_config.h
+ * 
+ * Provides functions to manage Wi-Fi connection and Over-The-Air (OTA) updates
+ * for ESP8266-based devices.
+ * 
+ * Features:
+ * - Connects the device to a Wi-Fi network using credentials defined in OTA_setting.h.
+ * - Sets up ArduinoOTA with hostname and password for secure OTA firmware updates.
+ * - Provides event handlers for OTA start, completion, and error reporting via Serial.
+ * 
+ * Requirements:
+ * - OTA_setting.h must define the OTAConfig namespace containing:
+ *   - SSID: Wi-Fi network name
+ *   - PASSWORD: Wi-Fi network password
+ *   - HOSTNAME: OTA device hostname
+ *   - OTA_PASS: OTA password for authentication
+ * 
+ * Usage:
+ * 1. Call setupOTA() during device initialization to connect Wi-Fi and enable OTA.
+ * 2. Ensure ArduinoOTA.handle() is called regularly (typically inside the loop).
+ */
+
 #pragma once
 
 #include <ESP8266WiFi.h>
 #include <ArduinoOTA.h>
 
 #include "OTA_setting.h" 
-  // Should contain the OTAConfig namespace
-  //  with SSID, PASSWORD, HOSTNAME, and OTA_PASS
-  //  defined as constexpr const char*
+  // Contains OTAConfig namespace with Wi-Fi and OTA credentials
 
 // ─────────────────────────────────────────────
 // 📡 Initialize Wi-Fi Connection
 // ─────────────────────────────────────────────
 void connectToWiFi() {
-  WiFi.begin(OTAConfig::SSID, OTAConfig::PASSWORD);
+  WiFi.begin(OTAConfig::SSID, OTAConfig::PASSWORD);  // Start Wi-Fi connection
+
   Serial.print("Connecting to WiFi");
-  while (WiFi.status() != WL_CONNECTED) {
+  while (WiFi.status() != WL_CONNECTED) {  // Wait until connected
     delay(500);
     Serial.print(".");
   }
   Serial.println("\n✅ WiFi connected.");
   Serial.print("📡 IP Address: ");
-  Serial.println(WiFi.localIP());
+  Serial.println(WiFi.localIP());  // Print the device's IP address
 }
 
 // ─────────────────────────────────────────────
 // 📤 Setup OTA (Over-The-Air Updates)
 // ─────────────────────────────────────────────
 void setupOTA() {
-  connectToWiFi();
+  connectToWiFi();  // Connect to Wi-Fi first
 
+  // Configure OTA hostname and authentication password
   ArduinoOTA.setHostname(OTAConfig::HOSTNAME);
   ArduinoOTA.setPassword(OTAConfig::OTA_PASS);
 
+  // OTA start callback: notify via serial
   ArduinoOTA.onStart([]() {
     Serial.println("🔄 OTA Update Start");
   });
 
+  // OTA end callback: notify via serial
   ArduinoOTA.onEnd([]() {
     Serial.println("✅ OTA Update Complete");
   });
 
+  // OTA error callback: print error reason
   ArduinoOTA.onError([](ota_error_t error) {
     Serial.printf("❌ OTA Error [%u]: ", error);
     switch (error) {
@@ -52,5 +78,5 @@ void setupOTA() {
     }
   });
 
-  ArduinoOTA.begin();
+  ArduinoOTA.begin();  // Start the OTA service
 }
