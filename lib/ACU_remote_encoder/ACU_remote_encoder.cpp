@@ -42,7 +42,7 @@ ACUState ACU_remote::getState() const {
 // Encode command into 64-bit with complement
 uint64_t ACU_remote::encodeCommand() {
   uint32_t command = 0;
-  command |= (encodeSignature() << 28);
+  command |= ((uint32_t)encodeSignature() << 28);
   command |= (0b0000 << 24);  // Reserved
   command |= (0b0000 << 20);  // Reserved
   command |= ((uint32_t)encodeFanSpeed() << 16);
@@ -78,9 +78,47 @@ String ACU_remote::toJSON() const {
   return json;
 }
 
+// JSON input to encode
+bool ACU_remote::fromJSON(const String& jsonString) {
+  JsonDocument doc;  // Use the updated type name
+  DeserializationError error = deserializeJson(doc, jsonString);
+
+  if (error) {
+    Serial.print("deserializeJson() failed: ");
+    Serial.println(error.c_str());
+    return false;
+  }
+
+  // Validate all fields using .is<T>()
+  if (!doc["fanSpeed"].is<uint8_t>() ||
+      !doc["temperature"].is<uint8_t>() ||
+      !doc["mode"].is<const char*>() ||
+      !doc["louver"].is<uint8_t>() ||
+      !doc["isOn"].is<bool>()) {
+    return false;
+  }
+
+  uint8_t fanSpeed = doc["fanSpeed"];
+  uint8_t temp = doc["temperature"];
+  String modeStr = doc["mode"].as<String>();
+  uint8_t louver = doc["louver"];
+  bool isOn = doc["isOn"];
+
+  ACUMode mode;
+  if (modeStr == "auto") mode = ACUMode::AUTO;
+  else if (modeStr == "cool") mode = ACUMode::COOL;
+  else if (modeStr == "heat") mode = ACUMode::HEAT;
+  else if (modeStr == "dry") mode = ACUMode::DRY;
+  else if (modeStr == "fan") mode = ACUMode::FAN;
+  else return false;  // Invalid mode string
+
+  setState(fanSpeed, temp, mode, louver, isOn);
+  return true;
+}
+
 // Private encode helpers
 uint8_t ACU_remote::encodeSignature() const {
-  if (signature == "mitsubishi-heavy") return 0b0101;
+  if (signature == "MITSUBISHI_HEAVY_64") return 0b0101;
   // Add more signatures if the brand follows the same 
   //  binary structure.
   return 0b0000;

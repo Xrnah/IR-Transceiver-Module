@@ -23,6 +23,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include <ArduinoJson.h>
 
 enum class ACUMode {
   AUTO,
@@ -65,6 +66,7 @@ public:
   // Utility
   static String toBinaryString(uint64_t value, bool spaced = true);
   String toJSON() const;
+  bool fromJSON(const String& jsonString);
 
 private:
   String signature;
