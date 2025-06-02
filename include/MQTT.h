@@ -28,11 +28,13 @@
 #include "ACU_IR_modulator.h"
 
 // MQTT broker settings
-const char* mqtt_server = "broker.hivemq.com";
+const char* mqtt_server = "192.168.68.109";    // For Testing: broker.hivemq.com 192.168.68.109
+const int mqtt_port = PORT#;
 const char* mqtt_topic_sub = "acu/control/ACU_identifier";
+const char* mqtt_topic_pub = "acu/control/ACU_identifier-ack";
 
 WiFiClient espClient;            // Wi-Fi client for MQTT
-PubSubClient client(espClient);  // MQTT client instance
+PubSubClient mqtt_client(espClient);  // MQTT client instance
 
 // ACU remote instance initialized with signature for encoding
 ACU_remote remote("MITSUBISHI_HEAVY_64");
@@ -75,37 +77,45 @@ void callback(char* topic, byte* payload, unsigned int length) {
   handleReceivedCommand(topic, payload, length);
 }
 
-// ====== MQTT reconnect logic ======
-void reconnect() {
-  while (!client.connected()) {
+// ====== MQTT reconnect logic (non-blocking) ======
+void mqtt_reconnect() {
+  static unsigned long lastAttemptTime = 0;
+  const unsigned long retryInterval = 10000;  // try every 10s
+
+  if (mqtt_client.connected()) return;
+
+  unsigned long now = millis();
+  if (now - lastAttemptTime >= retryInterval) {
+    lastAttemptTime = now;
+
     Serial.print("[MQTT] Attempting to connect...");
+    String clientId = "ESP8266Client-" + String(ESP.getChipId());
 
-    String clientId = "ESP8266Client-" + String(ESP.getChipId());  // Unique client ID
+    optimistic_yield(10000);  // Prevent OTA starvation
 
-    if (client.connect(clientId.c_str())) {
+    if (mqtt_client.connect(clientId.c_str())) {
       Serial.println(" connected");
-      client.subscribe(mqtt_topic_sub);  // Subscribe to control topic
-      Serial.print("[MQTT] Subscribed to topic: ");
-      Serial.println(mqtt_topic_sub);
+      mqtt_client.subscribe(mqtt_topic_sub);
     } else {
       Serial.print(" failed, rc=");
-      Serial.print(client.state());
-      Serial.println(" retrying in 5 seconds...");
-      delay(5000);
+      Serial.print(mqtt_client.state());
+      Serial.println(" retrying in 10 seconds...");
     }
   }
 }
 
+
+
 // ====== Initialize MQTT client ======
 void setupMQTT() {
-  client.setServer(mqtt_server, PORT#);  // Set broker and port
-  client.setCallback(callback);          // Set message callback
+  mqtt_client.setServer(mqtt_server, mqtt_port);  // Set broker and port
+  mqtt_client.setCallback(callback);          // Set message callback
 }
 
 // ====== MQTT loop to be called in main loop() ======
 void handleMQTT() {
-  if (!client.connected()) {
-    reconnect();  // Reconnect if disconnected
+  if (!mqtt_client.connected()) {
+    mqtt_reconnect();  // Reconnect if disconnected
   }
-  client.loop();  // Process incoming messages
+  mqtt_client.loop();  // Process incoming messages
 }

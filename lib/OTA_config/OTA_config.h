@@ -25,9 +25,12 @@
 
 #include <ESP8266WiFi.h>
 #include <ArduinoOTA.h>
+#include "OTA_setting.h"  // Contains OTAConfig namespace with Wi-Fi and OTA credentials
 
-#include "OTA_setting.h" 
-  // Contains OTAConfig namespace with Wi-Fi and OTA credentials
+// ─────────────────────────────────────────────
+// 🌐 OTA Update State Flag
+// ─────────────────────────────────────────────
+bool otaInProgress = false;  // Global flag to track OTA state
 
 // ─────────────────────────────────────────────
 // 📡 Initialize Wi-Fi Connection
@@ -55,18 +58,21 @@ void setupOTA() {
   ArduinoOTA.setHostname(OTAConfig::HOSTNAME);
   ArduinoOTA.setPassword(OTAConfig::OTA_PASS);
 
-  // OTA start callback: notify via serial
+  // OTA start callback
   ArduinoOTA.onStart([]() {
+    otaInProgress = true;
     Serial.println("🔄 OTA Update Start");
   });
 
-  // OTA end callback: notify via serial
+  // OTA end callback
   ArduinoOTA.onEnd([]() {
+    otaInProgress = false;
     Serial.println("✅ OTA Update Complete");
   });
 
-  // OTA error callback: print error reason
+  // OTA error callback
   ArduinoOTA.onError([](ota_error_t error) {
+    otaInProgress = false;  // Reset OTA state on error
     Serial.printf("❌ OTA Error [%u]: ", error);
     switch (error) {
       case OTA_AUTH_ERROR:    Serial.println("Auth Failed"); break;
@@ -78,5 +84,5 @@ void setupOTA() {
     }
   });
 
-  ArduinoOTA.begin();  // Start the OTA service
+  ArduinoOTA.begin();  // Start OTA service
 }

@@ -33,11 +33,14 @@ void setup() {
 }
 
 void loop() {
-  ArduinoOTA.handle();          // Handle OTA update requests
-  handleMQTT();                 // Maintain MQTT connection and process messages
+  ArduinoOTA.handle();  // Must be first to ensure responsiveness
 
-  // Debug: listen for IR binary input via serial to send IR signals
+  if (!otaInProgress) {
+    mqtt_reconnect();
+    mqtt_client.loop();  // MQTT client processing
+  }
+  
   #ifdef DEBUG_IR_PRINT
-  debugIRInput();
+  debugIRInput();  // Optional debug input from serial
   #endif
 }
