@@ -25,7 +25,10 @@
 
 #include <ESP8266WiFi.h>
 #include <ArduinoOTA.h>
+#include <EEPROM.h>
+
 #include "OTA_setting.h"  // Contains OTAConfig namespace with Wi-Fi and OTA credentials
+#include "WiFiManager.h"
 
 // ─────────────────────────────────────────────
 // 🌐 OTA Update State Flag
@@ -35,24 +38,12 @@ bool otaInProgress = false;  // Global flag to track OTA state
 // ─────────────────────────────────────────────
 // 📡 Initialize Wi-Fi Connection
 // ─────────────────────────────────────────────
-void connectToWiFi() {
-  WiFi.begin(OTAConfig::SSID, OTAConfig::PASSWORD);  // Start Wi-Fi connection
-
-  Serial.print("Connecting to WiFi");
-  while (WiFi.status() != WL_CONNECTED) {  // Wait until connected
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("\n✅ WiFi connected.");
-  Serial.print("📡 IP Address: ");
-  Serial.println(WiFi.localIP());  // Print the device's IP address
-}
 
 // ─────────────────────────────────────────────
 // 📤 Setup OTA (Over-The-Air Updates)
 // ─────────────────────────────────────────────
 void setupOTA() {
-  connectToWiFi();  // Connect to Wi-Fi first
+  autoConnectWiFiWithRetry();  // Connect to Wi-Fi first
 
   // Configure OTA hostname and authentication password
   ArduinoOTA.setHostname(OTAConfig::HOSTNAME);
