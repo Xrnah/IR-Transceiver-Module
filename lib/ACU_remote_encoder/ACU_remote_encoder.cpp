@@ -87,6 +87,7 @@ String ACU_remote::toJSON() const {
 }
 
 // ====== Deserialize state from JSON string ======
+// format: {"fanSpeed":2,"temperature":24,"mode":"cool","louver":3,"isOn":true}"
 bool ACU_remote::fromJSON(const String& jsonString) {
   StaticJsonDocument<256> doc;  // ⚠️ Using deprecated type; see notes
   DeserializationError error = deserializeJson(doc, jsonString);

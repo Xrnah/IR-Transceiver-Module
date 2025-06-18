@@ -26,6 +26,8 @@ void setup() {
   Serial.begin(115200);          // Initialize serial for debugging
   irsend.begin();                // Initialize IR sender hardware
 
+  delay(5000);                  // For Serial Print Consistency; Comment on production
+
   Serial.println("\nMCU Status: ON"); // Indicate MCU startup
 
   setupOTA();                   // Initialize OTA update functionality
@@ -33,14 +35,18 @@ void setup() {
 }
 
 void loop() {
-  ArduinoOTA.handle();  // Must be first to ensure responsiveness
+  ArduinoOTA.handle();
 
-  if (!otaInProgress) {
-    mqtt_reconnect();
-    mqtt_client.loop();  // MQTT client processing
+  checkWiFi();  // every 10s
+
+  if (WiFi.status() == WL_CONNECTED) {
+    handleMQTT();  // auto reconnects + loops MQTT
   }
-  
+
   #ifdef DEBUG_IR_PRINT
-  debugIRInput();  // Optional debug input from serial
+  debugIRInput();
   #endif
+
+  // Application-specific logic here
 }
+
