@@ -32,8 +32,8 @@ const char* mqtt_server = "192.168.80.47";    // For Testing: broker.hivemq.com 
 const int mqtt_port = 1883;
 
 // format: "floor/room/ACU#"
-const char* mqtt_topic_sub = "8th Floor/Airhub/ACU1";
-const char* mqtt_topic_pub = "8th Floor/Airhub/ACU1-ack";
+const char* mqtt_topic_sub = "8th Floor/809/ACU1";
+const char* mqtt_topic_pub = "8th Floor/809/ACU1-ack";
 
 WiFiClient espClient;            // Wi-Fi client for MQTT
 PubSubClient mqtt_client(espClient);  // MQTT client instance
