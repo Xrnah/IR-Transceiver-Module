@@ -1,3 +1,28 @@
+/*
+ * ACU_IR_modulator.h
+ * 
+ * This header defines IR protocol configurations and interfaces for encoding
+ * 64-bit air conditioner remote commands into IR signal durations.
+ * 
+ * Features:
+ * - Defines timing parameters (mark and space durations) for ACU IR protocols
+ *   such as Mitsubishi Heavy 64-bit protocol.
+ * - Supports selection of active IR protocol via a pointer for flexibility.
+ * - Provides constants/macros for easy access to IR signal timing parameters.
+ * - Declares external objects and buffers for IR transmission.
+ * - Declares functions to convert binary commands into IR duration sequences.
+ * - Includes legacy support for parsing from binary strings (useful for debugging).
+ * - Includes a debug utility function to read 64-bit binary input from Serial
+ *   and send the corresponding IR signal.
+ * 
+ * Usage:
+ * - Set 'selectedProtocol' to the desired IRProtocolConfig (e.g., MITSUBISHI_HEAVY_64).
+ * - Use parseBinaryToDurations() to convert commands to IR timing sequences.
+ * - Use debugIRInput() to test IR sending interactively via Serial input.
+ * 
+ * Target platform: ESP8266 with IR LED on pin 4 (default)
+ */
+
 #pragma once
 
 #include <Arduino.h>
