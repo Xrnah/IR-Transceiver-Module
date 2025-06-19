@@ -39,14 +39,15 @@ void loop() {
 
   checkWiFi();  // every 10s
 
-  if (WiFi.status() == WL_CONNECTED) {
-    handleMQTT();  // auto reconnects + loops MQTT
-  }
-
+  if (WiFi.status() == WL_CONNECTED){
+    if (!otaInProgress) {
+      handleMQTT();  // auto reconnects + loops MQTT
+    } // Pause MQTT Process when OTA is in Progress
+  } // Only proceed when connected to WiFi
+  
   #ifdef DEBUG_IR_PRINT
   debugIRInput();
   #endif
 
-  // Application-specific logic here
 }
 

@@ -28,12 +28,12 @@
 #include "ACU_IR_modulator.h"
 
 // MQTT broker settings
-const char* mqtt_server = "172.24.70.104";    // For Testing: broker.hivemq.com , test.mosquitto.org
+const char* mqtt_server = "Broker_Address";    // For Testing: broker.hivemq.com , test.mosquitto.org
 const int mqtt_port = PORT#;
 
 // format: "floor/room/ACU#"
-const char* mqtt_topic_sub = "7/Library/ACU_identifier";
-const char* mqtt_topic_pub = "8/Room_Number/ACU_identifier-ack";
+const char* mqtt_topic_sub = "Floor_Number/Room_Number/ACU_identifier";
+const char* mqtt_topic_pub = "Floor_Number/Room_Number/ACU_identifier-ack";
 
 WiFiClient espClient;            // Wi-Fi client for MQTT
 PubSubClient mqtt_client(espClient);  // MQTT client instance
