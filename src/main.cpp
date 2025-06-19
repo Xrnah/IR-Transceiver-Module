@@ -4,21 +4,22 @@
 #include "ACU_remote_encoder.h"
 #include "ACU_IR_modulator.h"
 
-// #include <PubSubClient.h> // MQTT implementation @ ACU_remote::fromJSON() & toJSON()
+// #include <PubSubClient.h> // MQTT implementation @ ACU_remote::toJSON()
 
-// Debug:
+// Debug flag for serial IR input/output (uncomment to enable)
 // #define DEBUG_IR_PRINT
 
-// Definitions:
-#define ACUsignature "MITSUBISHI_HEAVY_64"
-#define kIrLedPin     4
-#define rawDataLength 133
+// Constants
+#define ACUsignature "MITSUBISHI_HEAVY_64"   // Signature used by ACU encoder
+#define kIrLedPin     4                      // GPIO pin connected to IR LED
+#define rawDataLength 133                    // Length of IR raw duration buffer
 
-IRsend irsend(kIrLedPin);
-uint16_t durations[rawDataLength];
+// Global objects
+IRsend irsend(kIrLedPin);                   // IR sender instance on specified pin
+uint16_t durations[rawDataLength];          // Buffer for IR signal durations
 
-ACU_remote APC_ACU(ACUsignature);
-const IRProtocolConfig* selectedProtocol = &MITSUBISHI_HEAVY_64;
+ACU_remote APC_ACU(ACUsignature);           // ACU remote encoder instance
+const IRProtocolConfig* selectedProtocol = &MITSUBISHI_HEAVY_64;  // Active IR protocol config
 
 void setup() {
   Serial.begin(115200);
@@ -29,7 +30,7 @@ void setup() {
 
   setupOTA();
 
-  // Test 1: Pass uint64 command to string then send using the legacy parseBinaryToDurations function
+
   APC_ACU.setState(2, 24, ACUMode::COOL, 3, true);  // Fan Speed (1-4), Temperature (18-30), Mode, Louver (1-4), Power (ON = true)
   uint64_t cmd1 = APC_ACU.encodeCommand();
   Serial.println(cmd1);
@@ -49,8 +50,6 @@ void setup() {
 
   delay(2000);
 
-  // Test 2: Pass uint64_t command straight to parseBinaryToDurations (function overloading 
-  //  the legacy's use of string to uint64_t binary.
   APC_ACU.setState(1, 18, ACUMode::DRY, 2, false);
   uint64_t cmd2 = APC_ACU.encodeCommand();
   Serial.println(ACU_remote::toBinaryString(cmd2));
@@ -62,7 +61,7 @@ void setup() {
 
   delay(2000);
 
-  // Test 3: Repeat and encode 1 different parameter (Power)
+
   APC_ACU.setPowerState(true);
   uint64_t cmd3 = APC_ACU.encodeCommand();
   Serial.println(ACU_remote::toBinaryString(cmd3));
@@ -74,7 +73,6 @@ void setup() {
 
   delay(2000);
 
-  // Test 4: Implementation of JSON to encode and transmit
   String input = "{\"fanSpeed\":2,\"temperature\":24,\"mode\":\"cool\",\"louver\":3,\"isOn\":true}";
   if (APC_ACU.fromJSON(input)) {
     uint64_t cmdJSON = APC_ACU.encodeCommand();
@@ -90,9 +88,19 @@ void setup() {
 }
 
 void loop() {
-  ArduinoOTA.handle();  
+  ArduinoOTA.handle();
 
+  checkWiFi();  // every 10s
+
+  if (WiFi.status() == WL_CONNECTED){
+    if (!otaInProgress) {
+      handleMQTT();  // auto reconnects + loops MQTT
+    } // Pause MQTT Process when OTA is in Progress
+  } // Only proceed when connected to WiFi
+  
   #ifdef DEBUG_IR_PRINT
   debugIRInput();
   #endif
+
 }
+
