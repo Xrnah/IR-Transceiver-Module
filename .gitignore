@@ -7,6 +7,7 @@
 # This is for individual configuration settings
 #   ...will vary depending on your build
 # include/OTA_setting.h
+# platformio.ini
 
 # This is for testing
 Watch_COM_Ports.ps1
