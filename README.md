@@ -59,7 +59,7 @@ The transmitter logic is based on a reverse-engineered mobile app that worked wi
 
 ## 🔧 Usage
 
-The microcontroller receives **IR command instructions via MQTT**, structured as **JSON payloads**. These payloads define the desired ACU state including mode, fan speed, temperature, and louver position.
+The microcontroller receives **IR command instructions via MQTT**, structured as **JSON payloads**. These payloads define the desired ACU state including power, mode, fan speed, temperature, and louver position.
 
 ### 📨 MQTT Topic
 
@@ -75,6 +75,16 @@ The microcontroller receives **IR command instructions via MQTT**, structured as
   "louver": 3,
   "isOn": true
 }
+```
+### 💻 Publish via CLI using mosquitto_pub
+```
+mosquitto_pub -t acu/rooms/room101/set -m '{
+  "mode": "cool",
+  "fanSpeed": 2,
+  "temperature": 24,
+  "louver": 3,
+  "isOn": true
+}'
 ```
 
 ---
