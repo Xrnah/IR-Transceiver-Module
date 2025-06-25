@@ -1,6 +1,7 @@
 
 #include <Arduino.h>
 
+#include "WiFiManager.h"
 #include "OTA_config.h"           // OTA configuration and setup functions
 #include "ACU_remote_encoder.h"   // ACU remote command encoding
 #include "ACU_IR_modulator.h"     // IR modulation and signal generation
@@ -31,6 +32,11 @@ void setup() {
 
   Serial.println("\nMCU Status: ON"); // Indicate MCU startup
 
+  const char* hardcoded_ssid = "Test_SSID";
+  const char* hardcoded_pass = "Test_Pass";
+  autoConnectWiFi(hardcoded_ssid, hardcoded_pass);
+
+  // autoConnectWiFiWithRetry();   // Wifi
   setupOTA();                   // Initialize OTA update functionality
   setupMQTT();                  // Initialize MQTT communication
 }
