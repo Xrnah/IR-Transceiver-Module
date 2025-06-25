@@ -28,12 +28,15 @@
 #include "ACU_IR_modulator.h"
 
 // MQTT broker settings
-const char* mqtt_server = "192.168.80.47";    // For Testing: broker.hivemq.com , test.mosquitto.org
+// ⚠️ Will soon implement an mDNS mqtt service running in domain level server.
+const char* mqtt_server = "192.168.68.102";    // For Testing: broker.hivemq.com , test.mosquitto.org
 const int mqtt_port = 1883;
 
 // format: "floor/room/ACU#"
 const char* mqtt_topic_sub = "8th Floor/809/ACU1";
 const char* mqtt_topic_pub = "8th Floor/809/ACU1-ack";
+// sample json query:
+// {"fanSpeed":2,"temperature":24,"mode":"cool","louver":3,"isOn":true}
 
 WiFiClient espClient;            // Wi-Fi client for MQTT
 PubSubClient mqtt_client(espClient);  // MQTT client instance
