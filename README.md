@@ -45,6 +45,7 @@ The transmitter logic is based on a reverse-engineered mobile app that worked wi
 
 - 🛜 **MQTT-controlled wireless IR transmission**
   - Accepts **JSON-formatted instructions** for:
+    - Power (e.g. `"on"`, `"off"`)
     - Mode (e.g. `"cool"`, `"dry"`)
     - Fan speed (e.g. `"low"`, `"auto"`)
     - Temperature (e.g. `24`)
