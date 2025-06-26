@@ -24,7 +24,9 @@ WiFiCredential wifiTable[] = {
 // 4th Floor - Full Time Faculty / Registrar 
 // 5th Floor - School of Information Technology
 // 6th Floor - School of Psychology
-{"WiFi-817", ramsWifiPass2024},
+{"WiFi-609(A)", ramsWifiPass2024},
+{"WiFi-609(B)", ramsWifiPass2024},
+{"WiFi-609(C)", ramsWifiPass2024},
 // 7th Floor - Library
 {"WiFi-7F", ramsWifiPass2024},
 {"WiFi-Library", ramsWifiPass2024},
