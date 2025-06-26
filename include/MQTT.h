@@ -34,7 +34,7 @@ const int mqtt_port = PORT#;
 
 // format: "floor/room/ACU#"
 const char* mqtt_topic_sub = "Floor_Number/Room_Number/ACU_identifier";
-const char* mqtt_topic_pub = "Floor_Number/Room_Number/ACU_identifier-ack";
+const char* mqtt_topic_pub = "Floor_Number/Room_Number/ACU_identifier-status";
 // sample json query:
 // {"fanSpeed":2,"temperature":24,"mode":"cool","louver":3,"isOn":true}
 
@@ -44,32 +44,50 @@ PubSubClient mqtt_client(espClient);  // MQTT client instance
 // ACU remote instance initialized with signature for encoding
 ACU_remote remote("MITSUBISHI_HEAVY_64");
 
+// ====== Publish current state back to MQTT dashboard ======
+void publishDeviceState(const String& jsonPayload) {
+  if (mqtt_client.connected()) {
+    bool success = mqtt_client.publish(mqtt_topic_pub, jsonPayload.c_str(), true);  // retained = true
+    if (success) {
+      Serial.println("[MQTT] Published state to dashboard:");
+      Serial.println(jsonPayload);
+    } else {
+      Serial.println("[MQTT] Failed to publish state.");
+    }
+  } else {
+    Serial.println("[MQTT] Client not connected, publish skipped.");
+  }
+}
+
 // ====== Handle incoming MQTT messages ======
 void handleReceivedCommand(char* topic, byte* payload, unsigned int length) {
-  StaticJsonDocument<256> doc;  // JSON document buffer
+  StaticJsonDocument<256> doc;
 
-  // Deserialize JSON payload
   DeserializationError err = deserializeJson(doc, payload, length);
   if (err) {
     Serial.println("[MQTT] Failed to parse JSON");
-    return;  // Exit if JSON invalid
+    return;
   }
 
-  // Convert JSON payload to string for remote parsing
+  // Convert JSON payload to string
   String jsonStr;
   serializeJson(doc, jsonStr);
 
-  // Parse JSON and encode command
+  // Try to parse and encode command
   if (remote.fromJSON(jsonStr)) {
     uint64_t command = remote.encodeCommand();
     Serial.println("[MQTT] JSON parsed successfully");
     Serial.print("[MQTT] Encoded command: ");
     Serial.println(ACU_remote::toBinaryString(command, true));
 
-    // Convert encoded command into durations and send IR signal
+    // Send IR signal
     size_t len = 0;
     parseBinaryToDurations(command, durations, len);
-    irsend.sendRaw(durations, len, 38);  // Send at 38kHz carrier frequency
+    irsend.sendRaw(durations, len, 38);
+
+    // Relay the same JSON payload back to the MQTT dashboard
+    publishDeviceState(jsonStr);
+
   } else {
     Serial.println("[MQTT] Invalid command structure");
   }

@@ -34,9 +34,9 @@ void setup() {
 
   const char* hardcoded_ssid = "Test_SSID";
   const char* hardcoded_pass = "Test_Pass";
-  autoConnectWiFi(hardcoded_ssid, hardcoded_pass);
+  // autoConnectWiFi(hardcoded_ssid, hardcoded_pass);
 
-  // autoConnectWiFiWithRetry();   // Wifi
+  autoConnectWiFiWithRetry();   // Wifi
   setupOTA();                   // Initialize OTA update functionality
   setupMQTT();                  // Initialize MQTT communication
 }
