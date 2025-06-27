@@ -1,21 +1,19 @@
 /*
  * MQTT.h
- * 
- * Provides MQTT client setup and message handling for ESP8266 devices.
- * Integrates PubSubClient with Wi-Fi connectivity to receive and process
- * Air Conditioner control commands via MQTT.
- * 
+ *
+ * Handles MQTT setup and message processing for ESP8266.
+ * Used to receive control commands and send ACU status updates.
+ *
  * Features:
- * - Connects to a specified MQTT broker.
- * - Subscribes to a control topic and handles incoming JSON payloads.
- * - Parses and validates JSON commands using ArduinoJson.
- * - Converts commands into encoded IR signals for the ACU remote.
- * - Includes reconnection logic and periodic client loop management.
- * 
+ * - Connects to MQTT broker (LAN or public)
+ * - Subscribes to floor/room/unit topics
+ * - Parses incoming JSON and sends IR commands
+ * - Publishes current state back to dashboard
+ *
  * Usage:
- * 1. Call setupMQTT() in setup() to configure MQTT client and callbacks.
- * 2. Call handleMQTT() inside loop() to maintain connection and process messages.
- * 3. Implement ACU_remote and IR sending functions for command encoding and sending.
+ * - Call setupMQTTTopics() before setupMQTT()
+ * - Call setupMQTT() in setup()
+ * - Call handleMQTT() in loop()
  */
 
 #pragma once
@@ -27,118 +25,145 @@
 #include "ACU_remote_encoder.h"
 #include "ACU_IR_modulator.h"
 
-// MQTT broker settings
-// ⚠️ Will soon implement an mDNS mqtt service running in domain level server.
-const char* mqtt_server = "192.168.68.102";    // For Testing: broker.hivemq.com , test.mosquitto.org
+// ─────────────────────────────────────────────
+// 🔧 MQTT Broker Info
+// ─────────────────────────────────────────────
+// NOTE: LAN broker recommended in deployment
+const char* mqtt_server = "192.168.80.117";  // For testing: broker.hivemq.com
 const int mqtt_port = 1883;
 
-// format: "floor/room/ACU#"
-const char* mqtt_topic_sub = "8th Floor/809/ACU1";
-const char* mqtt_topic_pub = "8th Floor/809/ACU1-status";
+// ─────────────────────────────────────────────
+// 🧩 Topic Components (custom per device)
+// ─────────────────────────────────────────────
+// format: "floor_id/room_id/unit_id"
+const char* floor_id = "8th Floor";  // Avoid using just 'floor' (reserved in math.h)
+const char* room_id  = "Airhub";
+const char* unit_id  = "ACU1";
+
 // sample json query:
 // {"fanSpeed":2,"temperature":24,"mode":"cool","louver":3,"isOn":true}
 
-WiFiClient espClient;            // Wi-Fi client for MQTT
-PubSubClient mqtt_client(espClient);  // MQTT client instance
+// Built MQTT topic buffers
+char mqtt_topic_sub_floor[64];
+char mqtt_topic_sub_room[64];
+char mqtt_topic_sub_unit[64];
+char mqtt_topic_pub[80];
 
-// ACU remote instance initialized with signature for encoding
+// ─────────────────────────────────────────────
+// 🔨 Topic Construction (call in setup)
+// ─────────────────────────────────────────────
+void setupMQTTTopics() {
+  snprintf(mqtt_topic_sub_floor, sizeof(mqtt_topic_sub_floor), "%s", floor_id);
+  snprintf(mqtt_topic_sub_room,  sizeof(mqtt_topic_sub_room),  "%s/%s", floor_id, room_id);
+  snprintf(mqtt_topic_sub_unit,  sizeof(mqtt_topic_sub_unit),  "%s/%s/%s", floor_id, room_id, unit_id);
+  snprintf(mqtt_topic_pub,       sizeof(mqtt_topic_pub),       "%s-status", mqtt_topic_sub_unit);
+}
+
+// Clients and encoder instance
+WiFiClient espClient;
+PubSubClient mqtt_client(espClient);
 ACU_remote remote("MITSUBISHI_HEAVY_64");
 
-// ====== Publish current state back to MQTT dashboard ======
+// ─────────────────────────────────────────────
+// 📤 Publish state to dashboard
+// ─────────────────────────────────────────────
 void publishDeviceState(const String& jsonPayload) {
   if (mqtt_client.connected()) {
-    bool success = mqtt_client.publish(mqtt_topic_pub, jsonPayload.c_str(), true);  // retained = true
-    if (success) {
-      Serial.println("[MQTT] Published state to dashboard:");
+    bool ok = mqtt_client.publish(mqtt_topic_pub, jsonPayload.c_str(), true); // retain = true
+    if (ok) {
+      Serial.println("[MQTT] Published state:");
       Serial.println(jsonPayload);
     } else {
-      Serial.println("[MQTT] Failed to publish state.");
+      Serial.println("[MQTT] Publish failed.");
     }
   } else {
-    Serial.println("[MQTT] Client not connected, publish skipped.");
+    Serial.println("[MQTT] Not connected, skipping publish.");
   }
 }
 
-// ====== Handle incoming MQTT messages ======
+// ─────────────────────────────────────────────
+// 📥 Handle Incoming Commands
+// ─────────────────────────────────────────────
 void handleReceivedCommand(char* topic, byte* payload, unsigned int length) {
   StaticJsonDocument<256> doc;
-
   DeserializationError err = deserializeJson(doc, payload, length);
   if (err) {
-    Serial.println("[MQTT] Failed to parse JSON");
+    Serial.println("[MQTT] JSON parse failed");
     return;
   }
 
-  // Convert JSON payload to string
   String jsonStr;
   serializeJson(doc, jsonStr);
 
-  // Try to parse and encode command
   if (remote.fromJSON(jsonStr)) {
     uint64_t command = remote.encodeCommand();
-    Serial.println("[MQTT] JSON parsed successfully");
-    Serial.print("[MQTT] Encoded command: ");
+    Serial.println("[MQTT] JSON parsed and encoded:");
     Serial.println(ACU_remote::toBinaryString(command, true));
 
-    // Send IR signal
     size_t len = 0;
     parseBinaryToDurations(command, durations, len);
     irsend.sendRaw(durations, len, 38);
 
-    // Relay the same JSON payload back to the MQTT dashboard
     publishDeviceState(jsonStr);
-
   } else {
-    Serial.println("[MQTT] Invalid command structure");
+    Serial.println("[MQTT] Invalid command structure.");
   }
 }
 
-// ====== MQTT message callback ======
+// ─────────────────────────────────────────────
+// 📡 Callback on Message Arrival
+// ─────────────────────────────────────────────
 void callback(char* topic, byte* payload, unsigned int length) {
-  Serial.print("[MQTT] Message arrived on topic: ");
+  Serial.print("[MQTT] Incoming topic: ");
   Serial.println(topic);
   handleReceivedCommand(topic, payload, length);
 }
 
-// ====== MQTT reconnect logic (non-blocking) ======
+// ─────────────────────────────────────────────
+// ♻️ Reconnect (non-blocking)
+// ─────────────────────────────────────────────
 void mqtt_reconnect() {
-  static unsigned long lastAttemptTime = 0;
-  const unsigned long retryInterval = 10000;  // try every 10s
+  static unsigned long lastAttempt = 0;
+  const unsigned long retryInterval = 10000;
 
   if (mqtt_client.connected()) return;
 
   unsigned long now = millis();
-  if (now - lastAttemptTime >= retryInterval) {
-    lastAttemptTime = now;
+  if (now - lastAttempt >= retryInterval) {
+    lastAttempt = now;
 
-    Serial.print("[MQTT] Attempting to connect...");
+    Serial.print("[MQTT] Connecting... ");
     String clientId = "ESP8266Client-" + String(ESP.getChipId());
 
-    optimistic_yield(10000);  // Prevent OTA starvation
+    optimistic_yield(10000);  // Yield for OTA
 
     if (mqtt_client.connect(clientId.c_str())) {
-      Serial.println(" connected");
-      mqtt_client.subscribe(mqtt_topic_sub);
+      Serial.println("connected.");
+      mqtt_client.subscribe(mqtt_topic_sub_floor);
+      mqtt_client.subscribe(mqtt_topic_sub_room);
+      mqtt_client.subscribe(mqtt_topic_sub_unit);
     } else {
-      Serial.print(" failed, rc=");
+      Serial.print("failed (rc=");
       Serial.print(mqtt_client.state());
-      Serial.println(" retrying in 10 seconds...");
+      Serial.println("), retrying...");
     }
   }
 }
 
-
-
-// ====== Initialize MQTT client ======
+// ─────────────────────────────────────────────
+// 🚀 Setup MQTT Client
+// ─────────────────────────────────────────────
 void setupMQTT() {
-  mqtt_client.setServer(mqtt_server, mqtt_port);  // Set broker and port
-  mqtt_client.setCallback(callback);          // Set message callback
+  mqtt_client.setServer(mqtt_server, mqtt_port);
+  mqtt_client.setCallback(callback);
 }
 
-// ====== MQTT loop to be called in main loop() ======
+// ─────────────────────────────────────────────
+// 🔄 Maintain MQTT Connection
+// ─────────────────────────────────────────────
 void handleMQTT() {
   if (!mqtt_client.connected()) {
-    mqtt_reconnect();  // Reconnect if disconnected
+    mqtt_reconnect();
   }
-  mqtt_client.loop();  // Process incoming messages
+  mqtt_client.loop();
 }
