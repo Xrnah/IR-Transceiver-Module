@@ -45,6 +45,8 @@ const char* floor_id = "8th Floor";  // Avoid using just 'floor' (reserved in ma
 const char* room_id  = "807";
 const char* unit_id  = "ACU1";
 
+char lwt_message[] = "{\"status\":\"offline\"}";
+
 // sample json query:
 // {"fanSpeed":2,"temperature":24,"mode":"cool","louver":3,"isOn":true}
 
@@ -156,7 +158,7 @@ void mqtt_reconnect() {
 
     optimistic_yield(10000);  // Yield for OTA
 
-    if (mqtt_client.connect(clientId.c_str(), mqtt_user, mqtt_pass)) {
+    if (mqtt_client.connect(clientId.c_str(), mqtt_user, mqtt_pass, mqtt_topic_pub, 1, true, lwt_message)) {
       Serial.println("connected.");
       mqtt_client.subscribe(mqtt_topic_sub_floor);
       mqtt_client.subscribe(mqtt_topic_sub_room);
