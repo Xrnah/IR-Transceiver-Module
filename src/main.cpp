@@ -41,6 +41,7 @@ void setup() {
   setupOTA();                  // Start OTA service
   setupMQTTTopics();          // Build MQTT topic strings
   setupMQTT();                // Start MQTT client
+  setupTime();
 }
 
 // ─────────────────────────────────────────────
