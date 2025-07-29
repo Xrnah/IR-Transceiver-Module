@@ -55,12 +55,12 @@ bool otaInProgress = false;  // Global flag to track OTA state
 // ─────────────────────────────────────────────
 // 📡 Initialize Wi-Fi Connection
 // ─────────────────────────────────────────────
-
+  // autoConnectWiFiWithRetry();  // Connect to Wi-Fi first
+  
 // ─────────────────────────────────────────────
 // 📤 Setup OTA (Over-The-Air Updates)
 // ─────────────────────────────────────────────
 void setupOTA() {
-  // autoConnectWiFiWithRetry();  // Connect to Wi-Fi first
 
   // Configure OTA hostname and authentication password
   ArduinoOTA.setHostname(OTAConfig::HOSTNAME);
