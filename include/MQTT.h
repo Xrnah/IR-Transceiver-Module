@@ -24,6 +24,7 @@
 #include <ESP8266WiFi.h>
 #include "ACU_remote_encoder.h"
 #include "ACU_IR_modulator.h"
+#include <NTP.h>  // For getTimestamp()
 
 // ─────────────────────────────────────────────
 // 🔧 MQTT Broker Info
@@ -31,6 +32,10 @@
 // NOTE: LAN broker recommended in deployment
 const char* mqtt_server = "Broker_Address";  // For testing: broker.hivemq.com
 const int mqtt_port = PORT#;
+
+const char* mqtt_user = "Username";     // your MQTT username
+const char* mqtt_pass = "Password"; // your MQTT password
+
 
 // ─────────────────────────────────────────────
 // 🧩 Topic Components (custom per device)
@@ -53,10 +58,10 @@ char mqtt_topic_pub[80];
 // 🔨 Topic Construction (call in setup)
 // ─────────────────────────────────────────────
 void setupMQTTTopics() {
-  snprintf(mqtt_topic_sub_floor, sizeof(mqtt_topic_sub_floor), "%s", floor_id);
-  snprintf(mqtt_topic_sub_room,  sizeof(mqtt_topic_sub_room),  "%s/%s", floor_id, room_id);
-  snprintf(mqtt_topic_sub_unit,  sizeof(mqtt_topic_sub_unit),  "%s/%s/%s", floor_id, room_id, unit_id);
-  snprintf(mqtt_topic_pub,       sizeof(mqtt_topic_pub),       "%s-status", mqtt_topic_sub_unit);
+  snprintf(mqtt_topic_sub_floor, sizeof(mqtt_topic_sub_floor), "control/%s", floor_id);
+  snprintf(mqtt_topic_sub_room,  sizeof(mqtt_topic_sub_room),  "control/%s/%s", floor_id, room_id);
+  snprintf(mqtt_topic_sub_unit,  sizeof(mqtt_topic_sub_unit),  "control/%s/%s/%s", floor_id, room_id, unit_id);
+  snprintf(mqtt_topic_pub,       sizeof(mqtt_topic_pub),       "esp/%s/%s/%s-status", floor_id, room_id, unit_id);
 }
 
 // Clients and encoder instance
@@ -68,18 +73,32 @@ ACU_remote remote("MITSUBISHI_HEAVY_64");
 // 📤 Publish state to dashboard
 // ─────────────────────────────────────────────
 void publishDeviceState(const String& jsonPayload) {
-  if (mqtt_client.connected()) {
-    bool ok = mqtt_client.publish(mqtt_topic_pub, jsonPayload.c_str(), true); // retain = true
-    if (ok) {
-      Serial.println("[MQTT] Published state:");
-      Serial.println(jsonPayload);
-    } else {
-      Serial.println("[MQTT] Publish failed.");
-    }
-  } else {
+  if (!mqtt_client.connected()) {
     Serial.println("[MQTT] Not connected, skipping publish.");
+    return;
+  }
+
+  StaticJsonDocument<512> doc;
+  DeserializationError err = deserializeJson(doc, jsonPayload);
+  if (err) {
+    Serial.println("[MQTT] Failed to parse input JSON for publishing");
+    return;
+  }
+
+  doc["timestamp"] = getTimestamp();
+
+  String timestampedJson;
+  serializeJson(doc, timestampedJson);
+
+  bool ok = mqtt_client.publish(mqtt_topic_pub, timestampedJson.c_str(), true); // retain = true
+  if (ok) {
+    Serial.println("[MQTT] Published state with timestamp:");
+    Serial.println(timestampedJson);
+  } else {
+    Serial.println("[MQTT] Publish failed.");
   }
 }
+
 
 // ─────────────────────────────────────────────
 // 📥 Handle Incoming Commands
@@ -137,7 +156,7 @@ void mqtt_reconnect() {
 
     optimistic_yield(10000);  // Yield for OTA
 
-    if (mqtt_client.connect(clientId.c_str())) {
+    if (mqtt_client.connect(clientId.c_str(), mqtt_user, mqtt_pass)) {
       Serial.println("connected.");
       mqtt_client.subscribe(mqtt_topic_sub_floor);
       mqtt_client.subscribe(mqtt_topic_sub_room);
