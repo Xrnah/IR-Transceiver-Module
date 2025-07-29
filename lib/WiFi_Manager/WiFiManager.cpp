@@ -33,6 +33,7 @@ WiFiCredential wifiTable[] = {
 // 8th Floor - School of Engineering
 {"WiFi-8F", ramsWifiPass2024},
 // * 801 - Digital Electronics Laboratory
+{"Com Lab 801", ramsWifiPass2024},
 {"WiFi-801", ramsWifiPass2024},
 // * 802 - National Instrumental Laboratory
 {"WiFi-802", ramsWifiPass2024},
