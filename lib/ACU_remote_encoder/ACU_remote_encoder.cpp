@@ -81,7 +81,8 @@ String ACU_remote::toJSON() const {
   json += "\"temperature\":" + String(state.temperature) + ",";
   json += "\"mode\":\"" + modeToString(state.mode) + "\",";
   json += "\"louver\":" + String(state.louver) + ",";
-  json += "\"isOn\":" + String(state.isOn ? "true" : "false");
+  json += "\"isOn\":" + String(state.isOn ? "true" : "false") + ",";
+  json += "\"timestamp\":\"" + getTimestamp() + "\"";
   json += "}";
   return json;
 }
