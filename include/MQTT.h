@@ -164,7 +164,7 @@ void mqtt_reconnect() {
       mqtt_client.subscribe(mqtt_topic_sub_room);
       mqtt_client.subscribe(mqtt_topic_sub_unit);
     } else {
-      Serial.print("failed (rc=");
+      Serial.print("[MQTT] failed (rc=");
       Serial.print(mqtt_client.state());
       Serial.println("), retrying...");
     }
@@ -177,6 +177,7 @@ void mqtt_reconnect() {
 void setupMQTT() {
   mqtt_client.setServer(mqtt_server, mqtt_port);
   mqtt_client.setCallback(callback);
+  mqtt_client.setKeepAlive(10); // 10 seconds
 }
 
 // ─────────────────────────────────────────────
