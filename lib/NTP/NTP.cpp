@@ -3,14 +3,14 @@
 void setupTime() {
   configTime(8 * 3600, 0, "pool.ntp.org", "time.nist.gov"); // UTC+8
 
-  Serial.print("Waiting for NTP time sync");
+  Serial.print("[NTP] Waiting for NTP time sync");
   time_t now = time(nullptr);
   while (now < 8 * 3600 * 2) {
     delay(500);
     Serial.print(".");
     now = time(nullptr);
   }
-  Serial.println("\nTime synchronized.");
+  Serial.println("\n[NTP] Time synchronized.");
 }
 
 String getTimestamp() {
