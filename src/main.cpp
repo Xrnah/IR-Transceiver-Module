@@ -1,7 +1,7 @@
 #include <Arduino.h>
 
 #include "WiFiManager.h"           // Auto Wi-Fi connection manager
-#include "OTA_config.h"            // OTA setup and event handlers
+// #include "OTA_config.h"            // OTA setup and event handlers
 #include "ACU_remote_encoder.h"    // IR command generator (ACU signature)
 #include "ACU_IR_modulator.h"      // Converts command to IR waveform
 #include "MQTT.h"                  // MQTT messaging (PubSubClient wrapper)
@@ -38,7 +38,7 @@ void setup() {
   // autoConnectWiFi(ssid, pass);             // Direct WiFi
 
   autoConnectWiFiWithRetry();  // Smart WiFi retry + portal
-  setupOTA();                  // Start OTA service
+  // setupOTA();                  // Start OTA service
   setupMQTTTopics();          // Build MQTT topic strings
   setupMQTT();                // Start MQTT client
   setupTime();
@@ -48,14 +48,14 @@ void setup() {
 // 🔁 Main Loop
 // ─────────────────────────────────────────────
 void loop() {
-  ArduinoOTA.handle();      // OTA process (must always run)
+  // ArduinoOTA.handle();      // OTA process (must always run)
 
   checkWiFi();              // WiFi health check (runs every 10s)
 
   if (WiFi.status() == WL_CONNECTED) {
-    if (!otaInProgress) {
+    // if (!otaInProgress) {
       handleMQTT();         // MQTT loop and reconnection
-    } // MQTT paused when OTA is active
+    // } // MQTT paused when OTA is active
   }
 
   #ifdef DEBUG_IR_PRINT
