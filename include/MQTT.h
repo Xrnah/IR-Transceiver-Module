@@ -29,13 +29,13 @@
 // ─────────────────────────────────────────────
 // 🔧 MQTT Broker Info
 // ─────────────────────────────────────────────
-// NOTE: LAN broker recommended in deployment
+// NOTE: LAN broker recommended in deployment; Work Server: Broker_Address; LAN Server: Broker_Address
 const char* mqtt_server = "Broker_Address";  // For testing: broker.hivemq.com
 const int mqtt_port = PORT#;
 
+// To be changed on deployment...
 const char* mqtt_user = "Username";     // your MQTT username
 const char* mqtt_pass = "Password"; // your MQTT password
-
 
 // ─────────────────────────────────────────────
 // 🧩 Topic Components (custom per device)
@@ -49,6 +49,8 @@ char lwt_message[] = "{\"status\":\"offline\"}";
 
 // sample json query:
 // {"fanSpeed":2,"temperature":24,"mode":"cool","louver":3,"isOn":true}
+#define qos 1
+#define cleanSession false
 
 // Built MQTT topic buffers
 char mqtt_topic_sub_floor[64];
@@ -158,11 +160,11 @@ void mqtt_reconnect() {
 
     optimistic_yield(10000);  // Yield for OTA
 
-    if (mqtt_client.connect(clientId.c_str(), mqtt_user, mqtt_pass, mqtt_topic_pub, 1, true, lwt_message)) {
+    if (mqtt_client.connect(clientId.c_str(), mqtt_user, mqtt_pass, mqtt_topic_pub, 1, true, lwt_message, cleanSession)) {
       Serial.println("connected.");
-      mqtt_client.subscribe(mqtt_topic_sub_floor);
-      mqtt_client.subscribe(mqtt_topic_sub_room);
-      mqtt_client.subscribe(mqtt_topic_sub_unit);
+      mqtt_client.subscribe(mqtt_topic_sub_floor, qos);
+      mqtt_client.subscribe(mqtt_topic_sub_room, qos);
+      mqtt_client.subscribe(mqtt_topic_sub_unit, qos);
     } else {
       Serial.print("[MQTT] failed (rc=");
       Serial.print(mqtt_client.state());
