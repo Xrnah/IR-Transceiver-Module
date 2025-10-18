@@ -17,20 +17,20 @@ A subproject under the **Building Energy Management** initiative, this project a
 ## 📚 Project Details
 
 ### 🧠 Microcontroller
-- **ESP01M IR Transceiver** (ESP8285/ESP8266-based)
+- ESP01M IR Transceiver (ESP8285/ESP8266-based)
 
 ### 🖥️ Dashboard
-- **Grafana Enterprise**
+- Grafana Enterprise
 
 ### 🗄️ Database
-- **MySQL / MariaDB**
+- MySQL / MariaDB
 
 ### 🧰 Database Manager
-- **phpMyAdmin**
+- phpMyAdmin
 
 ### 🌐 IoT Components
-- **MQTT (PubSubClient-based)**
-- **PHP-based REST API** *(in progress)*
+- MQTT (PubSubClient-based)
+- PHP-based REST API *(in progress)*
 
 ---
 
