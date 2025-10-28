@@ -14,36 +14,29 @@ A subproject under the **Building Energy Management** initiative, this project a
 
 ---
 
-## 📚 Project Details
+## Project Details
 
-### 🧠 Microcontroller
+### Microcontroller
 - ESP01M IR Transceiver (ESP8285/ESP8266-based)
 
-### 🖥️ Dashboard
-- Grafana Enterprise
+### Dashboard
+- Bootstrap-based UI
 
-### 🗄️ Database
-- MySQL / MariaDB
-
-### 🧰 Database Manager
-- phpMyAdmin
-
-### 🌐 IoT Components
+### IoT Components
 - MQTT (PubSubClient-based)
-- PHP-based REST API *(in progress)*
 
 ---
 
-## 🧊 Mitsubishi Heavy ACU Protocol
+## Mitsubishi Heavy ACU Protocol
 
 The IR protocol is tailored to the **Mitsubishi Heavy FDE71VNXVG** ACU.  
 The transmitter logic is based on a reverse-engineered mobile app that worked with this unit. The official remote (RCN-E-E3) is planned for future integration.
 
 ---
 
-## 🚀 Current Features
+## Current Features
 
-- 🛜 **MQTT-controlled wireless IR transmission**
+- **MQTT-controlled wireless IR transmission**
   - Accepts **JSON-formatted instructions** for:
     - Power (e.g. `"on"`, `"off"`)
     - Mode (e.g. `"cool"`, `"dry"`)
@@ -51,22 +44,22 @@ The transmitter logic is based on a reverse-engineered mobile app that worked wi
     - Temperature (e.g. `24`)
     - Louver position (e.g. `"swing"`, `"3"`)
 
-- ♻️ **OTA (Over-the-Air) updates via local Wi-Fi**
-- 📶 **Auto-connect to APC campus Wi-Fi (pre-filled SSID table)**
-- 🛠️ **Custom `ACU_remote_encoder` and `ACU_IR_modulator` libraries**  
+- **OTA (Over-the-Air) updates via local Wi-Fi**
+- **Auto-connect to APC campus Wi-Fi (pre-filled SSID table)**
+- **Custom `ACU_remote_encoder` and `ACU_IR_modulator` libraries**  
   *(based on IRremoteESP8266 v2.8.6)*
 
 ---
 
-## 🔧 Usage
+## Usage
 
 The microcontroller receives **IR command instructions via MQTT**, structured as **JSON payloads**. These payloads define the desired ACU state including power, mode, fan speed, temperature, and louver position.
 
-### 📨 MQTT Topic
+### MQTT Topic
 
-📌 *Replace `<room_id>` with the actual room identifier.*
+*Replace `<room_id>` with the actual room identifier.*
 
-### 🧾 JSON Payload Format
+### JSON Payload Format
 
 ```json
 {
@@ -77,7 +70,7 @@ The microcontroller receives **IR command instructions via MQTT**, structured as
   "isOn": true
 }
 ```
-### 💻 Publish via CLI using mosquitto_pub
+### Publish via CLI using mosquitto_pub
 ```
 mosquitto_pub -t acu/rooms/room101/set -m '{
   "mode": "cool",
@@ -90,14 +83,28 @@ mosquitto_pub -t acu/rooms/room101/set -m '{
 
 ---
 
-## ⚙️ Setup Instructions  
-*To be added after refactor of user-initialized variables.*  
-Setup will include:
-- PlatformIO and/or Arduino IDE installation
-- Board configuration for ESP01M
-- OTA deployment guide
-- MQTT server setup
-- PHP dashboard API integration
+## Setup Instructions  
+*To be finalized after the refactor of user-initialized variables.*  
+
+To program the microcontroller, you'll need to:
+- Install an IDE (preferably VSCode)
+- Add PlatformIO extension
+- Configure the board (PlatformIO)
+
+To test the remote control, you'll need to:
+- Connect to a MQTT Broker
+- Hint: Find the `mqtt_server` variable in `MQTT.h` and connect to a corresponding broker and port.
+* This could either be a local deployment (via Mosquitto) or a public service such as HiveMQ
+
+To connect via localhost MQTT broker, 
+you must `allow_anonymous true` in mosquitto.conf.
+Then set the corresponding listener ports.
+
+Default broker configuration:
+```
+listerner PORT#
+protocol mqtt
+```
 
 ---
 
