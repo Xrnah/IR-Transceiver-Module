@@ -94,7 +94,9 @@ To program the microcontroller, you'll need to:
 To test the remote control, you'll need to:
 - Connect to a MQTT Broker
 - Hint: Find the `mqtt_server` variable in `MQTT.h` and connect to a corresponding broker and port.
-* This could either be a local deployment (via Mosquitto) or a public service such as HiveMQ
+- This could either be a local deployment (via Mosquitto) or a deployed development broker.
+- For more context about MQTT: [Introducing the MQTT Protocol | HiveMQ](https://www.hivemq.com/blog/mqtt-essentials-part-1-introducing-mqtt/)
+- For mqtt broker configuration: [Refer to Eclipse MQTT Documentation](https://mosquitto.org/documentation/)
 
 To connect via localhost MQTT broker, 
 you must `allow_anonymous true` in mosquitto.conf.
