@@ -184,11 +184,16 @@ uint8_t ACU_remote::encodeMode() const {
 }
 
 // Encode louver position as 4-bit value
-uint8_t ACU_remote::encodeLouver() const { //This does not do anything
+uint8_t ACU_remote::encodeLouver() const {
   switch (state.louver) {
-    case 0: return 0b0000;
-    case 1: return 0b0001;
-    case 2: return 0b0010;
+    case 3: return 0b1110; // 0 deg
+    case 0: return 0b0010; // 22.5 deg
+    case 1: return 0b1010; // 45 deg
+    case 2: return 0b0110; // 67.5
+    case 4: return 0b0000; // swing
+    // case 0: return 0b0000;
+    // case 1: return 0b0001;
+    // case 2: return 0b0010;
     // case 3: return 0b0011; // Triple beeps - not encoded
     // case 4: return 0b0100; // Same pattern
     // case 5: return 0b0101; // Only 00XX is encoded
