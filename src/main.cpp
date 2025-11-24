@@ -35,9 +35,9 @@ void setup() {
 
   // const char* ssid = "Test_SSID";         // Optional hardcoded credentials
   // const char* pass = "Test_Pass";
-  // autoConnectWiFi(ssid, pass);             // Direct WiFi
+  // WiFiManager::connectToHidden(ssid, pass);             // Direct WiFi
 
-  autoConnectWiFiWithRetry();  // Smart WiFi retry + portal
+  WiFiManager::autoConnectWithRetry();  // Smart WiFi retry + portal
   // setupOTA();                  // Start OTA service
   setupMQTTTopics();          // Build MQTT topic strings
   setupMQTT();                // Start MQTT client
@@ -50,7 +50,7 @@ void setup() {
 void loop() {
   // ArduinoOTA.handle();      // OTA process (must always run)
 
-  checkWiFi();              // WiFi health check (runs every 10s)
+  WiFiManager::checkConnection();              // WiFi health check (runs every 10s)
 
   if (WiFi.status() == WL_CONNECTED) {
     // if (!otaInProgress) {
