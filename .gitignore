@@ -5,7 +5,7 @@
 .vscode/ipch
 
 # This is for individual configuration settings
-#   ...will vary depending on your build
+#   ...will vary depending on build
 # include/OTA_setting.h
 # platformio.ini
 
