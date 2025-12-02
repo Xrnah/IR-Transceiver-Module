@@ -41,7 +41,16 @@ void setup() {
   // setupOTA();                  // Start OTA service
   setupMQTTTopics();          // Build MQTT topic strings
   setupMQTT();                // Start MQTT client
-  setupTime();
+  setupTime();                // Configure NTP
+
+  // Ensure MQTT is connected before publishing the initial status
+  Serial.println("[MQTT] Waiting for initial connection...");
+  while (!mqtt_client.connected()) {
+    mqtt_reconnect();   
+    mqtt_client.loop(); 
+    delay(100);         // Small delay to yield processing time
+  } powerOnPublish();
+
 }
 
 // ─────────────────────────────────────────────

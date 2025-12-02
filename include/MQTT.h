@@ -89,7 +89,9 @@ void publishDeviceState(const String& jsonPayload) {
     return;
   }
 
-  doc["timestamp"] = getTimestamp();
+  if (!doc.containsKey("timestamp")) {
+    doc["timestamp"] = getTimestamp();
+  }
 
   String timestampedJson;
   serializeJson(doc, timestampedJson);
@@ -103,6 +105,17 @@ void publishDeviceState(const String& jsonPayload) {
   }
 }
 
+void powerOnPublish() {
+  StaticJsonDocument<256> doc;
+  String powerOnTimestamp = "Powered ON @: " + getTimestamp();
+
+  doc["isOn"] = "The device recently powered ON, please send a command";
+  doc["timestamp"] = powerOnTimestamp;
+
+  String initial_status;
+  serializeJson(doc, initial_status);
+  publishDeviceState(initial_status); // Publishes the JSON string with the custom timestamp
+}
 
 // ─────────────────────────────────────────────
 // 📥 Handle Incoming Commands
