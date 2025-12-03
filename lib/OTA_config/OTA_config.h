@@ -27,8 +27,25 @@
 #include <ArduinoOTA.h>
 #include <EEPROM.h>
 
-#include "OTA_setting.h"  // Contains OTAConfig namespace with Wi-Fi and OTA credentials
 #include "WiFiManager.h"
+
+
+// ─────────────────────────────────────────────────────────────
+// 🔧 OTA Configuration Settings (can be moved to separate file)
+// ─────────────────────────────────────────────────────────────
+namespace OTAConfig {
+  // Home settings
+  // constexpr const char* SSID       = "Test_SSID";
+  // constexpr const char* PASSWORD   = "Test_Pass";
+
+  // Work Settings
+  // constexpr const char* SSID       = "Test_SSID";
+  // constexpr const char* PASSWORD   = "Test_Pass";
+
+  // Global setting
+  constexpr const char* HOSTNAME   = "OTA_NAME";
+  constexpr const char* OTA_PASS   = "Password!";
+}
 
 // ─────────────────────────────────────────────
 // 🌐 OTA Update State Flag
@@ -38,12 +55,12 @@ bool otaInProgress = false;  // Global flag to track OTA state
 // ─────────────────────────────────────────────
 // 📡 Initialize Wi-Fi Connection
 // ─────────────────────────────────────────────
-
+  // autoConnectWiFiWithRetry();  // Connect to Wi-Fi first
+  
 // ─────────────────────────────────────────────
 // 📤 Setup OTA (Over-The-Air Updates)
 // ─────────────────────────────────────────────
 void setupOTA() {
-  autoConnectWiFiWithRetry();  // Connect to Wi-Fi first
 
   // Configure OTA hostname and authentication password
   ArduinoOTA.setHostname(OTAConfig::HOSTNAME);

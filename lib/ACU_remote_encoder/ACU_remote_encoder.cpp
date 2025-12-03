@@ -81,7 +81,8 @@ String ACU_remote::toJSON() const {
   json += "\"temperature\":" + String(state.temperature) + ",";
   json += "\"mode\":\"" + modeToString(state.mode) + "\",";
   json += "\"louver\":" + String(state.louver) + ",";
-  json += "\"isOn\":" + String(state.isOn ? "true" : "false");
+  json += "\"isOn\":" + String(state.isOn ? "true" : "false") + ",";
+  json += "\"timestamp\":\"" + getTimestamp() + "\"";
   json += "}";
   return json;
 }
@@ -141,7 +142,7 @@ uint8_t ACU_remote::encodeFanSpeed() const {
     case 1: return 0b0010;
     case 2: return 0b1010;
     case 3: return 0b0110;
-    case 4: return 0b1110;
+    // case 4: return 0b1110; // Triple beeps
     default: return 0b0000;
   }
 }
@@ -185,11 +186,28 @@ uint8_t ACU_remote::encodeMode() const {
 // Encode louver position as 4-bit value
 uint8_t ACU_remote::encodeLouver() const {
   switch (state.louver) {
-    case 1: return 0b0000;
-    case 2: return 0b1000;
-    case 3: return 0b0100;
-    case 4: return 0b1100;
-    default: return 0b0000;
+    case 0: return 0b0010; // 22.5 deg
+    case 1: return 0b1010; // 45 deg
+    case 2: return 0b0110; // 67.5
+    case 3: return 0b1110; // 0 deg
+    case 4: return 0b0000; // swing
+    // case 0: return 0b0000;
+    // case 1: return 0b0001;
+    // case 2: return 0b0010;
+    // case 3: return 0b0011; // Triple beeps - not encoded
+    // case 4: return 0b0100; // Same pattern
+    // case 5: return 0b0101; // Only 00XX is encoded
+    // case 6: return 0b0110;
+    // case 7: return 0b0111; // Triple beeps - not encoded
+    // case 8: return 0b1000;
+    // case 9: return 0b1001;
+    // case 10: return 0b1010; 
+    // case 11: return 0b1011; // Triple beeps
+    // case 12: return 0b1100;
+    // case 13: return 0b1101;
+    // case 14: return 0b1110;
+    // case 15: return 0b1111; // Triple beeps
+    default: return 0b1110; // 0 deg default
   }
 }
 

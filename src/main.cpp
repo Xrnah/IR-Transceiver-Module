@@ -60,19 +60,17 @@ void setup() {
 // 🔁 Main Loop
 // ─────────────────────────────────────────────
 void loop() {
-  ArduinoOTA.handle();
+  // ArduinoOTA.handle();      // OTA process (must always run)
 
   wifiManager.checkConnection();              // WiFi health check (runs every 10s)
 
-  if (WiFi.status() == WL_CONNECTED){
-    if (!otaInProgress) {
-      handleMQTT();  // auto reconnects + loops MQTT
-    } // Pause MQTT Process when OTA is in Progress
-  } // Only proceed when connected to WiFi
-  
+  if (WiFi.status() == WL_CONNECTED) {
+    // if (!otaInProgress) {
+      handleMQTT();         // MQTT loop and reconnection
+    // } // MQTT paused when OTA is active
+  }
+
   #ifdef DEBUG_IR_PRINT
-  debugIRInput();
+  debugIRInput();           // Optional IR test via Serial input
   #endif
-
 }
-

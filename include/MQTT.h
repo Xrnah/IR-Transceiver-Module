@@ -1,21 +1,19 @@
 /*
  * MQTT.h
- * 
- * Provides MQTT client setup and message handling for ESP8266 devices.
- * Integrates PubSubClient with Wi-Fi connectivity to receive and process
- * Air Conditioner control commands via MQTT.
- * 
+ *
+ * Handles MQTT setup and message processing for ESP8266.
+ * Used to receive control commands and send ACU status updates.
+ *
  * Features:
- * - Connects to a specified MQTT broker.
- * - Subscribes to a control topic and handles incoming JSON payloads.
- * - Parses and validates JSON commands using ArduinoJson.
- * - Converts commands into encoded IR signals for the ACU remote.
- * - Includes reconnection logic and periodic client loop management.
- * 
+ * - Connects to MQTT broker (LAN or public)
+ * - Subscribes to floor/room/unit topics
+ * - Parses incoming JSON and sends IR commands
+ * - Publishes current state back to dashboard
+ *
  * Usage:
- * 1. Call setupMQTT() in setup() to configure MQTT client and callbacks.
- * 2. Call handleMQTT() inside loop() to maintain connection and process messages.
- * 3. Implement ACU_remote and IR sending functions for command encoding and sending.
+ * - Call setupMQTTTopics() before setupMQTT()
+ * - Call setupMQTT() in setup()
+ * - Call handleMQTT() in loop()
  */
 
 #pragma once
@@ -75,83 +73,134 @@ WiFiClient espClient;
 PubSubClient mqtt_client(espClient);
 ACU_remote remote("MITSUBISHI_HEAVY_64");
 
-// ====== Handle incoming MQTT messages ======
-void handleReceivedCommand(char* topic, byte* payload, unsigned int length) {
-  StaticJsonDocument<256> doc;  // JSON document buffer
-
-  // Deserialize JSON payload
-  DeserializationError err = deserializeJson(doc, payload, length);
-  if (err) {
-    Serial.println("[MQTT] Failed to parse JSON");
-    return;  // Exit if JSON invalid
+// ─────────────────────────────────────────────
+// 📤 Publish state to dashboard
+// ─────────────────────────────────────────────
+void publishDeviceState(const String& jsonPayload) {
+  if (!mqtt_client.connected()) {
+    Serial.println("[MQTT] Not connected, skipping publish.");
+    return;
   }
 
-  // Convert JSON payload to string for remote parsing
-  String jsonStr;
-  serializeJson(doc, jsonStr);
+  StaticJsonDocument<512> doc;
+  DeserializationError err = deserializeJson(doc, jsonPayload);
+  if (err) {
+    Serial.println("[MQTT] Failed to parse input JSON for publishing");
+    return;
+  }
 
-  // Parse JSON and encode command
-  if (remote.fromJSON(jsonStr)) {
-    uint64_t command = remote.encodeCommand();
-    Serial.println("[MQTT] JSON parsed successfully");
-    Serial.print("[MQTT] Encoded command: ");
-    Serial.println(ACU_remote::toBinaryString(command, true));
+  if (!doc.containsKey("timestamp")) {
+    doc["timestamp"] = getTimestamp();
+  }
 
-    // Convert encoded command into durations and send IR signal
-    size_t len = 0;
-    parseBinaryToDurations(command, durations, len);
-    irsend.sendRaw(durations, len, 38);  // Send at 38kHz carrier frequency
+  String timestampedJson;
+  serializeJson(doc, timestampedJson);
+
+  bool ok = mqtt_client.publish(mqtt_topic_pub, timestampedJson.c_str(), true); // retain = true
+  if (ok) {
+    Serial.println("[MQTT] Published state with timestamp:");
+    Serial.println(timestampedJson);
   } else {
-    Serial.println("[MQTT] Invalid command structure");
+    Serial.println("[MQTT] Publish failed.");
   }
 }
 
-// ====== MQTT message callback ======
+void powerOnPublish() {
+  StaticJsonDocument<256> doc;
+  String powerOnTimestamp = "Powered ON @: " + getTimestamp();
+
+  doc["isOn"] = "The device recently powered ON, please send a command";
+  doc["timestamp"] = powerOnTimestamp;
+
+  String initial_status;
+  serializeJson(doc, initial_status);
+  publishDeviceState(initial_status); // Publishes the JSON string with the custom timestamp
+}
+
+// ─────────────────────────────────────────────
+// 📥 Handle Incoming Commands
+// ─────────────────────────────────────────────
+void handleReceivedCommand(char* topic, byte* payload, unsigned int length) {
+  StaticJsonDocument<256> doc;
+  DeserializationError err = deserializeJson(doc, payload, length);
+  if (err) {
+    Serial.println("[MQTT] JSON parse failed");
+    return;
+  }
+
+  String jsonStr;
+  serializeJson(doc, jsonStr);
+
+  if (remote.fromJSON(jsonStr)) {
+    uint64_t command = remote.encodeCommand();
+    Serial.println("[MQTT] JSON parsed and encoded:");
+    Serial.println(ACU_remote::toBinaryString(command, true));
+
+    size_t len = 0;
+    parseBinaryToDurations(command, durations, len);
+    irsend.sendRaw(durations, len, 38);
+
+    publishDeviceState(jsonStr);
+  } else {
+    Serial.println("[MQTT] Invalid command structure.");
+  }
+}
+
+// ─────────────────────────────────────────────
+// 📡 Callback on Message Arrival
+// ─────────────────────────────────────────────
 void callback(char* topic, byte* payload, unsigned int length) {
-  Serial.print("[MQTT] Message arrived on topic: ");
+  Serial.print("[MQTT] Incoming topic: ");
   Serial.println(topic);
   handleReceivedCommand(topic, payload, length);
 }
 
-// ====== MQTT reconnect logic (non-blocking) ======
+// ─────────────────────────────────────────────
+// ♻️ Reconnect (non-blocking)
+// ─────────────────────────────────────────────
 void mqtt_reconnect() {
-  static unsigned long lastAttemptTime = 0;
-  const unsigned long retryInterval = 10000;  // try every 10s
+  static unsigned long lastAttempt = 0;
+  const unsigned long retryInterval = 10000;
 
   if (mqtt_client.connected()) return;
 
   unsigned long now = millis();
-  if (now - lastAttemptTime >= retryInterval) {
-    lastAttemptTime = now;
+  if (now - lastAttempt >= retryInterval) {
+    lastAttempt = now;
 
-    Serial.print("[MQTT] Attempting to connect...");
+    Serial.print("[MQTT] Connecting... ");
     String clientId = "ESP8266Client-" + String(ESP.getChipId());
 
-    optimistic_yield(10000);  // Prevent OTA starvation
+    optimistic_yield(10000);  // Yield for OTA
 
-    if (mqtt_client.connect(clientId.c_str())) {
-      Serial.println(" connected");
-      mqtt_client.subscribe(mqtt_topic_sub);
+    if (mqtt_client.connect(clientId.c_str(), mqtt_user, mqtt_pass, mqtt_topic_pub, 1, true, lwt_message, cleanSession)) {
+      Serial.println("connected.");
+      mqtt_client.subscribe(mqtt_topic_sub_floor, qos);
+      mqtt_client.subscribe(mqtt_topic_sub_room, qos);
+      mqtt_client.subscribe(mqtt_topic_sub_unit, qos);
     } else {
-      Serial.print(" failed, rc=");
+      Serial.print("[MQTT] failed (rc=");
       Serial.print(mqtt_client.state());
-      Serial.println(" retrying in 10 seconds...");
+      Serial.println("), retrying...");
     }
   }
 }
 
-
-
-// ====== Initialize MQTT client ======
+// ─────────────────────────────────────────────
+// 🚀 Setup MQTT Client
+// ─────────────────────────────────────────────
 void setupMQTT() {
-  mqtt_client.setServer(mqtt_server, mqtt_port);  // Set broker and port
-  mqtt_client.setCallback(callback);          // Set message callback
+  mqtt_client.setServer(mqtt_server, mqtt_port);
+  mqtt_client.setCallback(callback);
+  mqtt_client.setKeepAlive(10); // 10 seconds
 }
 
-// ====== MQTT loop to be called in main loop() ======
+// ─────────────────────────────────────────────
+// 🔄 Maintain MQTT Connection
+// ─────────────────────────────────────────────
 void handleMQTT() {
   if (!mqtt_client.connected()) {
-    mqtt_reconnect();  // Reconnect if disconnected
+    mqtt_reconnect();
   }
-  mqtt_client.loop();  // Process incoming messages
+  mqtt_client.loop();
 }

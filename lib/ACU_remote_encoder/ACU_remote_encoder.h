@@ -29,6 +29,7 @@
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include "NTP.h"
 
 // ====== Enumerations ======
 
