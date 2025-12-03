@@ -1,43 +1,68 @@
 #include <Arduino.h>
 
-#include "OTA_config.h"           // OTA configuration and setup functions
-#include "ACU_remote_encoder.h"   // ACU remote command encoding
-#include "ACU_IR_modulator.h"     // IR modulation and signal generation
+#include "WiFiManager.h"           // WiFi connection manager class
+// #include "OTA_config.h"            // OTA setup and event handlers
+#include "ACU_remote_encoder.h"    // IR command generator (ACU signature)
+#include "ACU_IR_modulator.h"      // Converts command to IR waveform
+#include "MQTT.h"                  // MQTT messaging (PubSubClient wrapper)
 
-// MQTT client wrapper (uses ACU_remote::toJSON() for messaging)
-#include "MQTT.h"                 // Uses the PubSubClient library
+// ─────────────────────────────────────────────
+// 📡 Configuration
+// ─────────────────────────────────────────────
+#define ACUsignature   "MITSUBISHI_HEAVY_64"   // ACU IR signature
+#define kIrLedPin      4                       // IR LED GPIO pin
+#define rawDataLength  133                     // Raw buffer size for IR pulse timing
 
-// Debug flag for serial IR input/output (uncomment to enable)
+// Optional: Enable this to send test IR via Serial input
 // #define DEBUG_IR_PRINT
 
-// Constants
-#define ACUsignature "MITSUBISHI_HEAVY_64"   // Signature used by ACU encoder
-#define kIrLedPin     4                      // GPIO pin connected to IR LED
-#define rawDataLength 133                    // Length of IR raw duration buffer
+// ─────────────────────────────────────────────
+// 🔧 Global Objects
+// ─────────────────────────────────────────────
+WiFiManager wifiManager;                       // WiFi manager instance
+IRsend irsend(kIrLedPin);                      // IR transmitter
+uint16_t durations[rawDataLength];             // Pulse duration buffer
+ACU_remote APC_ACU(ACUsignature);              // IR encoder instance
+const IRProtocolConfig* selectedProtocol = &MITSUBISHI_HEAVY_64;
 
-// Global objects
-IRsend irsend(kIrLedPin);                   // IR sender instance on specified pin
-uint16_t durations[rawDataLength];          // Buffer for IR signal durations
-
-ACU_remote APC_ACU(ACUsignature);           // ACU remote encoder instance
-const IRProtocolConfig* selectedProtocol = &MITSUBISHI_HEAVY_64;  // Active IR protocol config
-
+// ─────────────────────────────────────────────
+// 🛠️ Setup (runs once on boot)
+// ─────────────────────────────────────────────
 void setup() {
-  Serial.begin(115200);          // Initialize serial for debugging
-  irsend.begin();                // Initialize IR sender hardware
+  Serial.begin(115200);
+  irsend.begin();             // IR pin setup
+  delay(5000);                // Serial startup delay (skip in production)
+  Serial.println("\n🔌 MCU Status: ON");
 
-  delay(5000);                  // For Serial Print Consistency; Comment on production
+  // Optional: Connect to a hidden network using credentials from secrets.h
+  // #include "secrets.h" // Include this only if you uncomment the lines below
+  // const char* ssid = HIDDEN_SSID; // HIDDEN_SSID is a #define from secrets.h
+  // const char* pass = HIDDEN_PASS; // HIDDEN_PASS is a #define from secrets.h
+  // wifiManager.connectToHidden(ssid, pass);
 
-  Serial.println("\nMCU Status: ON"); // Indicate MCU startup
+  wifiManager.autoConnectWithRetry();  // Smart WiFi retry
+  // setupOTA();                  // Start OTA service
+  setupMQTTTopics();          // Build MQTT topic strings
+  setupMQTT();                // Start MQTT client
+  setupTime();                // Configure NTP
 
-  setupOTA();                   // Initialize OTA update functionality
-  setupMQTT();                  // Initialize MQTT communication
+  // Ensure MQTT is connected before publishing the initial status
+  Serial.println("[MQTT] Waiting for initial connection...");
+  while (!mqtt_client.connected()) {
+    mqtt_reconnect();   
+    mqtt_client.loop(); 
+    delay(100);         // Small delay to yield processing time
+  } powerOnPublish();
+
 }
 
+// ─────────────────────────────────────────────
+// 🔁 Main Loop
+// ─────────────────────────────────────────────
 void loop() {
   ArduinoOTA.handle();
 
-  checkWiFi();  // every 10s
+  wifiManager.checkConnection();              // WiFi health check (runs every 10s)
 
   if (WiFi.status() == WL_CONNECTED){
     if (!otaInProgress) {

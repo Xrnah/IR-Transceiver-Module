@@ -26,19 +26,53 @@
 #include <ESP8266WiFi.h>
 #include "ACU_remote_encoder.h"
 #include "ACU_IR_modulator.h"
+#include <NTP.h>  // For getTimestamp()
+#include "secrets.h" // Secret credentials
 
-// MQTT broker settings
-const char* mqtt_server = "Broker_Address";    // For Testing: broker.hivemq.com , test.mosquitto.org
-const int mqtt_port = PORT#;
+// ─────────────────────────────────────────────
+// 🔧 MQTT Broker Info
+// ─────────────────────────────────────────────
+// Broker address, user, and password are defined in 'secrets.h'
+const char* mqtt_server = MQTT_SERVER;
+const int mqtt_port = MQTT_PORT;
 
-// format: "floor/room/ACU#"
-const char* mqtt_topic_sub = "Floor_Number/Room_Number/ACU_identifier";
-const char* mqtt_topic_pub = "Floor_Number/Room_Number/ACU_identifier-ack";
+const char* mqtt_user = MQTT_USER;
+const char* mqtt_pass = MQTT_PASS;
 
-WiFiClient espClient;            // Wi-Fi client for MQTT
-PubSubClient mqtt_client(espClient);  // MQTT client instance
+// ─────────────────────────────────────────────
+// 🧩 Topic Components (custom per device)
+// ─────────────────────────────────────────────
+// format: "floor_id/room_id/unit_id"
+extern const char* floor_id;  // Avoid using just 'floor' (reserved in math.h)
+extern const char* room_id;
+extern const char* unit_id;
 
-// ACU remote instance initialized with signature for encoding
+char lwt_message[] = "{\"status\":\"offline\"}";
+
+// sample json query:
+// {"fanSpeed":2,"temperature":24,"mode":"cool","louver":3,"isOn":true}
+#define qos 1
+#define cleanSession false
+
+// Built MQTT topic buffers
+char mqtt_topic_sub_floor[64];
+char mqtt_topic_sub_room[64];
+char mqtt_topic_sub_unit[64];
+char mqtt_topic_pub[80];
+
+// ─────────────────────────────────────────────
+// 🔨 Topic Construction (call in setup)
+// ─────────────────────────────────────────────
+void setupMQTTTopics() {
+  snprintf(mqtt_topic_sub_floor, sizeof(mqtt_topic_sub_floor), "control/%s", floor_id);
+  snprintf(mqtt_topic_sub_room,  sizeof(mqtt_topic_sub_room),  "control/%s/%s", floor_id, room_id);
+  snprintf(mqtt_topic_sub_unit,  sizeof(mqtt_topic_sub_unit),  "control/%s/%s/%s", floor_id, room_id, unit_id);
+  snprintf(mqtt_topic_pub,       sizeof(mqtt_topic_pub),       "esp/%s/%s/%s-status", floor_id, room_id, unit_id);
+}
+
+// Clients and encoder instance
+WiFiClient espClient;
+PubSubClient mqtt_client(espClient);
 ACU_remote remote("MITSUBISHI_HEAVY_64");
 
 // ====== Handle incoming MQTT messages ======
