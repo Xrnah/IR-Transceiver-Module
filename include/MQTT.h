@@ -113,6 +113,7 @@ void powerOnPublish() {
   doc["isOn"] = "The device recently powered ON, please send a command";
   doc["timestamp"] = powerOnTimestamp;
   doc["deviceID"] = clientId;
+  doc["deviceIP"] = WiFi.localIP().toString();
 
   String initial_status;
   serializeJson(doc, initial_status);
@@ -149,11 +150,51 @@ void handleReceivedCommand(char* topic, byte* payload, unsigned int length) {
 }
 
 // ─────────────────────────────────────────────
+// 📥 Handle Conflicting Topic (from retained/false-cleanSessions)
+// ─────────────────────────────────────────────
+bool topicMatchesModule(char* topic) {
+  // Expected forms:
+  // control/floor
+  // control/floor/room
+  // control/floor/room/unit
+
+  String t = String(topic);
+  t.trim();
+  if (!t.startsWith("control/")) return false;
+
+  // Split by '/'
+  int idx1 = t.indexOf('/', 0);           // after 'control'
+  int idx2 = t.indexOf('/', idx1 + 1);    // after floor
+  int idx3 = t.indexOf('/', idx2 + 1);    // after room
+
+  String floor = t.substring(idx1 + 1, (idx2 == -1 ? t.length() : idx2));
+  if (floor != floor_id) return false;
+
+  // Only floor match → OK
+  if (idx2 == -1) return true;
+
+  String room = t.substring(idx2 + 1, (idx3 == -1 ? t.length() : idx3));
+  if (room != room_id) return false;
+
+  // Floor + room match → OK
+  if (idx3 == -1) return true;
+
+  String unit = t.substring(idx3 + 1);
+  return (unit == unit_id);
+}
+
+// ─────────────────────────────────────────────
 // 📡 Callback on Message Arrival
 // ─────────────────────────────────────────────
 void callback(char* topic, byte* payload, unsigned int length) {
   Serial.print("[MQTT] Incoming topic: ");
   Serial.println(topic);
+
+  if (!topicMatchesModule(topic)) {
+    Serial.println("[MQTT] Topic rejected by filter.");
+    return;
+  }
+
   handleReceivedCommand(topic, payload, length);
 }
 
