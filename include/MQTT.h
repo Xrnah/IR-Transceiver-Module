@@ -108,9 +108,11 @@ void publishDeviceState(const String& jsonPayload) {
 void powerOnPublish() {
   StaticJsonDocument<256> doc;
   String powerOnTimestamp = "Powered ON @: " + getTimestamp();
+  String clientId = "ESP8266Client-" + String(ESP.getChipId());
 
   doc["isOn"] = "The device recently powered ON, please send a command";
   doc["timestamp"] = powerOnTimestamp;
+  doc["deviceID"] = clientId;
 
   String initial_status;
   serializeJson(doc, initial_status);
