@@ -2,6 +2,9 @@
 #include <Arduino.h>
 #include <time.h>
 
+#define NTP_ADDR1 "pool.ntp.org"
+#define NTP_ADDR2 "time.google.com"
+
 /**
  * @brief Initializes NTP time synchronization for the microcontroller.
  * Uses Philippine Time (UTC+8).

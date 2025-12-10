@@ -1,7 +1,7 @@
 #include "NTP.h"
 
 void setupTime() {
-  configTime(8 * 3600, 0, "pool.ntp.org", "time.nist.gov"); // UTC+8
+  configTime(8 * 3600, 0, NTP_ADDR1, NTP_ADDR2); // UTC+8
 
   Serial.print("[NTP] Waiting for NTP time sync");
   time_t now = time(nullptr);
