@@ -1,5 +1,9 @@
 #include <Arduino.h>
 
+// Initialized variables
+#include "secrets.h"
+
+// Custom Libraries
 #include "WiFiManager.h"           // WiFi connection manager class
 // #include "OTA_config.h"            // OTA setup and event handlers
 #include "ACU_remote_encoder.h"    // IR command generator (ACU signature)

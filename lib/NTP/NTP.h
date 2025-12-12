@@ -2,8 +2,8 @@
 #include <Arduino.h>
 #include <time.h>
 
-#define NTP_ADDR1 "pool.ntp.org"
-#define NTP_ADDR2 "time.google.com"
+extern const char* NTP_ADDR1_P;
+extern const char* NTP_ADDR2_P;
 
 /**
  * @brief Initializes NTP time synchronization for the microcontroller.

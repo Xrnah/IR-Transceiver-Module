@@ -41,9 +41,9 @@ const char* mqtt_pass = MQTT_PASS;
 // 🧩 Topic Components (custom per device)
 // ─────────────────────────────────────────────
 // format: "floor_id/room_id/unit_id"
-extern const char* floor_id;  // Avoid using just 'floor' (reserved in math.h)
-extern const char* room_id;
-extern const char* unit_id;
+const char* floor_id = DEFINED_FLOOR;
+const char* room_id = DEFINED_ROOM;
+const char* unit_id = DEFINED_UNIT;
 
 char lwt_message[] = "{\"status\":\"offline\"}";
 

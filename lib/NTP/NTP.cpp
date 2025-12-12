@@ -1,4 +1,8 @@
 #include "NTP.h"
+#include "secrets.h" // Include secrets for NTP server addresses
+
+const char* NTP_ADDR1 = NTP_SERVER_1;
+const char* NTP_ADDR2 = NTP_SERVER_2;
 
 void setupTime() {
   configTime(8 * 3600, 0, NTP_ADDR1, NTP_ADDR2); // UTC+8
