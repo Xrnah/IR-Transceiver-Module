@@ -40,7 +40,7 @@ void setup() {
 
   // First, try to connect to a known hidden network. This is a blocking call.
   // If this fails, the non-blocking manager will take over.
-  wifiManager.connectToHidden(HIDDEN_SSID, HIDDEN_PASS);
+  // wifiManager.connectToHidden(HIDDEN_SSID, HIDDEN_PASS);
 
   wifiManager.begin(); // Start the non-blocking WiFi connection process
 

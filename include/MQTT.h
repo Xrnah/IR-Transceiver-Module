@@ -110,7 +110,7 @@ void powerOnPublish() {
   String powerOnTimestamp = "Powered ON @: " + getTimestamp();
   String clientId = "ESP8266Client-" + String(ESP.getChipId());
 
-  doc["isOn"] = "The device recently powered ON, please send a command";
+  doc["isOn"] = "The device recently powered ON, send a command to update";
   doc["timestamp"] = powerOnTimestamp;
   doc["deviceID"] = clientId;
   doc["deviceIP"] = WiFi.localIP().toString();
