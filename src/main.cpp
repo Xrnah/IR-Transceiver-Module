@@ -19,7 +19,7 @@
 // ─────────────────────────────────────────────
 // 🔧 Global Objects
 // ─────────────────────────────────────────────
-WiFiManager wifiManager;                       // WiFi manager instance
+CustomWiFi::WiFiManager wifiManager;           // WiFi manager instance
 IRsend irsend(kIrLedPin);                      // IR transmitter
 uint16_t durations[rawDataLength];             // Pulse duration buffer
 ACU_remote APC_ACU(ACUsignature);              // IR encoder instance
@@ -34,13 +34,18 @@ void setup() {
   delay(5000);                // Serial startup delay (skip in production)
   Serial.println("\n🔌 MCU Status: ON");
 
-  // Optional: Connect to a hidden network using credentials from secrets.h
-  // #include "secrets.h" // Include this only if you uncomment the lines below
-  // const char* ssid = HIDDEN_SSID; // HIDDEN_SSID is a #define from secrets.h
-  // const char* pass = HIDDEN_PASS; // HIDDEN_PASS is a #define from secrets.h
-  // wifiManager.connectToHidden(ssid, pass);
+  // First, try to connect to a known hidden network. This is a blocking call.
+  // If this fails, the non-blocking manager will take over.
+  wifiManager.connectToHidden(HIDDEN_SSID, HIDDEN_PASS);
 
-  wifiManager.autoConnectWithRetry();  // Smart WiFi retry
+  wifiManager.begin(); // Start the non-blocking WiFi connection process
+
+  Serial.println("Connecting to WiFi...");
+  while (WiFi.status() != WL_CONNECTED) {
+    wifiManager.handleConnection(); // Let the state machine run
+    delay(10); // Small delay to prevent busy-waiting
+  }
+
   // setupOTA();                  // Start OTA service
   setupMQTTTopics();          // Build MQTT topic strings
   setupMQTT();                // Start MQTT client
@@ -48,9 +53,9 @@ void setup() {
 
   // Ensure MQTT is connected before publishing the initial status
   Serial.println("[MQTT] Waiting for initial connection...");
-  while (!mqtt_client.connected()) {
-    mqtt_reconnect();   
-    mqtt_client.loop(); 
+    while (!mqtt_client.connected()) {
+    mqtt_reconnect();
+    mqtt_client.loop();
     delay(100);         // Small delay to yield processing time
   } powerOnPublish();
 
@@ -62,7 +67,7 @@ void setup() {
 void loop() {
   // ArduinoOTA.handle();      // OTA process (must always run)
 
-  wifiManager.checkConnection();              // WiFi health check (runs every 10s)
+  wifiManager.handleConnection();             // Manage WiFi state (reconnects if needed)
 
   if (WiFi.status() == WL_CONNECTED) {
     // if (!otaInProgress) {

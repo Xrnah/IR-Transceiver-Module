@@ -10,6 +10,7 @@ include/secrets.h
 # include/secret_template.h
 # platformio.ini
 lib/WiFi_Manager/wifi_credentials.h
+lib/WiFi_Manager/wifi_credentials.cpp
 replacements.txt
 
 # This is for testing

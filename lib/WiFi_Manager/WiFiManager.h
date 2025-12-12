@@ -1,19 +1,18 @@
 /*
  * WiFiManager.h
  *
- * Refactored to a class-based design for better encapsulation and maintainability.
- * Handles WiFi auto-connection, scanning, and recovery for ESP8266.
+ * Refactored to a non-blocking, state-machine-based design for better
+ * encapsulation, responsiveness, and maintainability.
  *
  * Features:
- * - Scans for known WiFi networks using a predefined table of SSID-password pairs
- * - Automatically connects to the strongest available known SSID
+ * - Asynchronously handles connection logic without blocking the main loop.
  * - Supports EEPROM save/load of last successful credentials
- * - Reconnect logic with retry attempt tracking
+ * - Robust reconnect logic with configurable timeouts and retries.
  *
  * Usage:
  * - Instantiate the WiFiManager class.
- * - Call autoConnectWithRetry() in setup().
- * - Call checkConnection() in the main loop().
+ * - Call begin() in setup().
+ * - Call handleConnection() in the main loop().
  */
 
 #pragma once
@@ -21,41 +20,58 @@
 #include <ESP8266WiFi.h>
 #include <EEPROM.h>
 
-struct WiFiCredential {
-  const char* ssid;
-  const char* password;
-};
+#include "WiFiData.h"
 
-class WiFiManager {
-public:
-  // --- Public API ---
-  WiFiManager();
-  void autoConnectWithRetry();
-  void checkConnection();
-  bool connectToHidden(const char* ssid, const char* pass);
-
-private:
-  // --- Configuration ---
-  static constexpr size_t SSID_MAX_LEN = 32;
-  static constexpr size_t PASS_MAX_LEN = 64;
-  static constexpr unsigned long WIFI_RETRY_DELAY_MS = 1000;
-  static constexpr int WIFI_RETRY_LIMIT = 0; // 0 for infinite retries
-  static constexpr unsigned long WIFI_CHECK_INTERVAL_MS = 10000;
-
-  struct StoredCredential {
-    uint32_t magic; // To validate EEPROM data
-    char ssid[SSID_MAX_LEN];
-    char password[PASS_MAX_LEN];
+namespace CustomWiFi {
+    
+  // Represents the current state of the WiFi connection process.
+  enum class WiFiState {
+    IDLE,
+    CONNECTING_SAVED,
+    SCANNING,
+    CONNECTING_SCANNED,
+    CONNECTED,
+    DISCONNECTED,
+    CONNECTION_FAILED
   };
-  static constexpr uint32_t EEPROM_MAGIC = 0xDEADBEEF;
 
-  // --- State ---
-  unsigned long lastWiFiCheck = 0;
+  class WiFiManager {
+  public:
+    // --- Public API ---
+    WiFiManager();
+    void begin();
+    void handleConnection();
+    bool connectToHidden(const char* ssid, const char* pass);
 
-  // --- Core Logic ---
-  bool autoConnect();
-  bool connectToWiFi(const char* ssid, const char* password);
-  void saveWiFiToEEPROM(const char* ssid, const char* password);
-  bool readWiFiFromEEPROM(char* ssid, char* password);
-};
+  private:
+    // --- Configuration ---
+    static constexpr size_t SSID_MAX_LEN = 32;
+    static constexpr size_t PASS_MAX_LEN = 64;
+    static constexpr unsigned long WIFI_CONNECT_TIMEOUT_MS = 10000;
+    static constexpr unsigned long WIFI_RETRY_DELAY_MS = 1000;
+    static constexpr int WIFI_RETRY_LIMIT = 0; // 0 for infinite retries
+    static constexpr unsigned long WIFI_CHECK_INTERVAL_MS = 10000;
 
+    struct StoredCredential {
+      uint32_t magic; // To validate EEPROM data
+      char ssid[SSID_MAX_LEN];
+      char password[PASS_MAX_LEN];
+    };
+    static constexpr uint32_t EEPROM_MAGIC = 0xDEADBEEF;
+
+    // --- State ---
+    WiFiState currentState;
+    unsigned long lastWiFiCheck = 0;
+    unsigned long lastAttemptTime = 0;
+    int retryCount = 0;
+
+    // --- Core Logic ---
+    void trySavedCredentials();
+    void startConnection(const char* ssid, const char* password, WiFiState nextState);
+    void checkConnectionProgress();
+    void findAndConnectToBestNetwork();
+    void handleRetry();
+    void saveWiFiToEEPROM(const char* ssid, const char* password);
+    bool readWiFiFromEEPROM(char* ssid, char* password);
+  };
+} // namespace CustomWiFi

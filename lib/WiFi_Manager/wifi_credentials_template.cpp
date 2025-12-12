@@ -10,22 +10,27 @@
  */
 
 /*
- * wifi_credentials.h (Template)
+ * wifi_credentials.cpp (Template)
  *
  * This file contains the WiFi credentials for the project.
  * It is included by WiFiManager.cpp and should be added to .gitignore
  * to prevent sensitive information from being committed to version control.
  */
 
-#pragma once
+#include "WiFiData.h"
 
-#include "WiFiManager.h"
+namespace CustomWiFi {
 
-// --- Known WiFi Networks Table ---
-WiFiCredential wifiTable[] = {
+// --- Shared Passwords ---
+const char* constantPASS1 = "PASS1";
 
-    {"Sample_SSID1", "Plaintext_Pass1"},
-    {"Sample_SSID2", "Plaintext_Pass2"},
-    {"Sample_SSID3", "Plaintext_Pass3"},
-
+const WiFiCredential wifiTable[] = {
+    {"WiFI", constantPASS1},
+    {"through", "anotherPass"},
+    {"Example", "ThisIsThePassword"},
+    // Add more networks here
 };
+
+const int WIFI_COUNT = sizeof(wifiTable) / sizeof(wifiTable[0]);
+
+} // namespace CustomWiFi
