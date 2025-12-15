@@ -28,6 +28,7 @@ namespace CustomWiFi {
   enum class WiFiState {
     IDLE,
     CONNECTING_SAVED,
+    CONNECTING_HIDDEN,
     SCANNING,
     CONNECTING_SCANNED,
     CONNECTED,
@@ -64,6 +65,10 @@ namespace CustomWiFi {
     unsigned long lastWiFiCheck = 0;
     unsigned long lastAttemptTime = 0;
     int retryCount = 0;
+    
+    // --- Hidden Network State ---
+    char hidden_ssid[SSID_MAX_LEN] = {0};
+    char hidden_pass[PASS_MAX_LEN] = {0};
 
     // --- Core Logic ---
     void trySavedCredentials();

@@ -71,15 +71,21 @@ void CustomWiFi::WiFiManager::handleConnection() {
 
     case CustomWiFi::WiFiState::DISCONNECTED:
       Serial.println("🔁 Starting connection process...");
-      trySavedCredentials();
+      // If a hidden network is configured, prioritize it.
+      if (strlen(hidden_ssid) > 0) {
+        startConnection(hidden_ssid, hidden_pass, CustomWiFi::WiFiState::CONNECTING_HIDDEN);
+      } else {
+        trySavedCredentials();
+      }
       break;
 
     case CustomWiFi::WiFiState::CONNECTING_SAVED:
     case CustomWiFi::WiFiState::CONNECTING_SCANNED:
+    case CustomWiFi::WiFiState::CONNECTING_HIDDEN:
       checkConnectionProgress();
       break;
 
-    case WiFiState::SCANNING:
+    case CustomWiFi::WiFiState::SCANNING:
       // In a real non-blocking implementation, scanning would also be managed.
       // For simplicity, we'll keep the scan blocking but integrated into the state flow.
       findAndConnectToBestNetwork();
@@ -110,65 +116,53 @@ void CustomWiFi::WiFiManager::startConnection(const char* ssid, const char* pass
 }
 
 void CustomWiFi::WiFiManager::checkConnectionProgress() {
-  // Store the state before it's updated on success
-  WiFiState previousState = currentState;
-
   if (WiFi.status() == WL_CONNECTED) {
     Serial.println("\n✅ WiFi connected.");
     Serial.print("📡 IP Address: ");
     Serial.println(WiFi.localIP());
-    currentState = CustomWiFi::WiFiState::CONNECTED;
-    retryCount = 0;  // Reset on success
-    // If we connected via a scan, save the successful credentials
-    if (previousState == CustomWiFi::WiFiState::CONNECTING_SCANNED) {
+
+    // Save credentials on first successful connection from scan or hidden
+    if (currentState == CustomWiFi::WiFiState::CONNECTING_SCANNED || currentState == CustomWiFi::WiFiState::CONNECTING_HIDDEN) {
+      Serial.println("💾 Saving successful credentials to EEPROM...");
       saveWiFiToEEPROM(WiFi.SSID().c_str(), WiFi.psk().c_str());
     }
+
+    currentState = CustomWiFi::WiFiState::CONNECTED;
+    retryCount = 0;  // Reset on success
     return;
   }
 
   // Check for connection timeout
   if (millis() - lastAttemptTime > WIFI_CONNECT_TIMEOUT_MS) {
     Serial.println("\n❌ Connection attempt timed out.");
-    WiFi.disconnect();
+    WiFi.disconnect(true); // Disconnect and erase SDK config
 
-    // If connecting with saved credentials failed, try scanning next
-    if (currentState == CustomWiFi::WiFiState::CONNECTING_SAVED) {
-      Serial.println("Saved credentials failed. Scanning for networks...");
-      currentState = CustomWiFi::WiFiState::SCANNING;
-    } else {
-      currentState = CustomWiFi::WiFiState::CONNECTION_FAILED;
+    // Determine next state based on which connection attempt failed
+    switch (currentState) {
+      case CustomWiFi::WiFiState::CONNECTING_SAVED:
+        Serial.println("Saved credentials failed. Scanning for networks...");
+        currentState = CustomWiFi::WiFiState::SCANNING;
+        break;
+      case CustomWiFi::WiFiState::CONNECTING_HIDDEN:
+      case CustomWiFi::WiFiState::CONNECTING_SCANNED:
+      default:
+        // For hidden, scanned, or any other state, move to the generic failure state
+        currentState = CustomWiFi::WiFiState::CONNECTION_FAILED;
+        break;
     }
   }
 }
 
-bool CustomWiFi::WiFiManager::connectToHidden(const char* hardcoded_ssid, const char* hardcoded_pass) {
-  int hidden_retry_count = 0;
+bool CustomWiFi::WiFiManager::connectToHidden(const char* ssid, const char* pass) {
+  // Configure the manager to operate in "hidden only" mode.
+  // If ssid is null or empty, this will clear the hidden config,
+  // causing the manager to fall back to saved/scan mode.
+  strncpy(hidden_ssid, ssid ? ssid : "", SSID_MAX_LEN - 1);
+  strncpy(hidden_pass, pass ? pass : "", PASS_MAX_LEN - 1);
+
   WiFi.mode(WIFI_STA);
-
-  while (WiFi.status() != WL_CONNECTED) {
-    hidden_retry_count++;
-    Serial.printf("\n[HIDDEN] Attempt #%d to connect to %s...\n", hidden_retry_count, hardcoded_ssid);
-
-    WiFi.begin(hardcoded_ssid, hardcoded_pass);
-
-    unsigned long attempt_start = millis();
-    while (WiFi.status() != WL_CONNECTED && (millis() - attempt_start < WIFI_CONNECT_TIMEOUT_MS)) {
-      delay(500);
-      Serial.print(".");
-    }
-
-    if (WiFi.status() == WL_CONNECTED) {
-      Serial.println("\n✅ WiFi connected to hidden network.");
-      Serial.print("📡 IP Address: ");
-      Serial.println(WiFi.localIP());
-      currentState = CustomWiFi::WiFiState::CONNECTED;
-      return true;
-    } else {
-      Serial.printf("\n❌ Connection to hidden network failed. Retrying in %lu ms...\n", WIFI_RETRY_DELAY_MS);
-      delay(WIFI_RETRY_DELAY_MS);
-    }
-  }
-  return false; // Should not be reached if connection is successful
+  currentState = CustomWiFi::WiFiState::DISCONNECTED; // Kick off the connection process
+  return true; // Indicates that the process has been initiated.
 }
 
 void CustomWiFi::WiFiManager::findAndConnectToBestNetwork() {
