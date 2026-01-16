@@ -25,7 +25,7 @@
 #include "ACU_remote_encoder.h"
 #include "ACU_IR_modulator.h"
 #include <NTP.h>  // For getTimestamp()
-#include "secrets.h" // Secret credentials
+#include "secrets.h" // Credentials
 
 // ─────────────────────────────────────────────
 // 🔧 MQTT Broker Info
@@ -41,6 +41,8 @@ const char* mqtt_pass = MQTT_PASS;
 // 🧩 Topic Components (custom per device)
 // ─────────────────────────────────────────────
 // format: "floor_id/room_id/unit_id"
+const char* state_root = STATE_PATH;
+const char* control_root = CONTROL_PATH;
 const char* floor_id = DEFINED_FLOOR;
 const char* room_id = DEFINED_ROOM;
 const char* unit_id = DEFINED_UNIT;
@@ -49,12 +51,12 @@ char lwt_message[] = "{\"status\":\"offline\"}";
 
 // sample json query:
 // {"fanSpeed":2,"temperature":24,"mode":"cool","louver":3,"isOn":true}
-#define qos 1
+#define qos 1 // Quality of Service
 #define cleanSession false
 
 // Built MQTT topic buffers
-char mqtt_topic_sub_floor[64];
-char mqtt_topic_sub_room[64];
+// char mqtt_topic_sub_floor[64];
+// char mqtt_topic_sub_room[64];
 char mqtt_topic_sub_unit[64];
 char mqtt_topic_pub[80];
 
@@ -62,10 +64,8 @@ char mqtt_topic_pub[80];
 // 🔨 Topic Construction (call in setup)
 // ─────────────────────────────────────────────
 void setupMQTTTopics() {
-  snprintf(mqtt_topic_sub_floor, sizeof(mqtt_topic_sub_floor), "control/%s", floor_id);
-  snprintf(mqtt_topic_sub_room,  sizeof(mqtt_topic_sub_room),  "control/%s/%s", floor_id, room_id);
-  snprintf(mqtt_topic_sub_unit,  sizeof(mqtt_topic_sub_unit),  "control/%s/%s/%s", floor_id, room_id, unit_id);
-  snprintf(mqtt_topic_pub,       sizeof(mqtt_topic_pub),       "esp/%s/%s/%s-status", floor_id, room_id, unit_id);
+  snprintf(mqtt_topic_sub_unit,  sizeof(mqtt_topic_sub_unit),  "%s/%s/%s/%s", control_root, floor_id, room_id, unit_id);
+  snprintf(mqtt_topic_pub,       sizeof(mqtt_topic_pub),       "%s/%s/%s/%s-status", state_root, floor_id, room_id, unit_id);
 }
 
 // Clients and encoder instance
@@ -73,6 +73,10 @@ WiFiClient espClient;
 PubSubClient mqtt_client(espClient);
 ACU_remote remote("MITSUBISHI_HEAVY_64");
 
+// Heartbeat variables
+String lastReceivedCommandJson;
+unsigned long lastHeartbeatTime = 0;
+const long HEARTBEAT_INTERVAL_MS = 15000; // 15 seconds
 // ─────────────────────────────────────────────
 // 📤 Publish state to dashboard
 // ─────────────────────────────────────────────
@@ -89,12 +93,16 @@ void publishDeviceState(const String& jsonPayload) {
     return;
   }
 
+  // To do: Remove getTimestamp to avoid WDT resets
+  //   Make a backend service to refer
   if (!doc.containsKey("timestamp")) {
     doc["timestamp"] = getTimestamp();
   }
 
   String timestampedJson;
+  yield();
   serializeJson(doc, timestampedJson);
+  yield();
 
   bool ok = mqtt_client.publish(mqtt_topic_pub, timestampedJson.c_str(), true); // retain = true
   if (ok) {
@@ -110,8 +118,9 @@ void powerOnPublish() {
   String powerOnTimestamp = "Powered ON @: " + getTimestamp();
   String clientId = "ESP8266Client-" + String(ESP.getChipId());
 
-  doc["isOn"] = "The device recently powered ON, send a command to update";
-  doc["timestamp"] = powerOnTimestamp;
+  doc["status"] = "The device recently powered ON, send a command to update";
+  // doc["timestamp"] = powerOnTimestamp;
+  doc["timestamp"] = getTimestamp();
   doc["deviceID"] = clientId;
   doc["deviceIP"] = WiFi.localIP().toString();
 
@@ -144,6 +153,7 @@ void handleReceivedCommand(char* topic, byte* payload, unsigned int length) {
     irsend.sendRaw(durations, len, 38);
 
     publishDeviceState(jsonStr);
+    lastReceivedCommandJson = jsonStr; // Store the last successfully processed command for heartbeat
   } else {
     Serial.println("[MQTT] Invalid command structure.");
   }
@@ -212,14 +222,20 @@ void mqtt_reconnect() {
     lastAttempt = now;
 
     Serial.print("[MQTT] Connecting... ");
-    String clientId = "ESP8266Client-" + String(ESP.getChipId());
+    
+    static char clientId[32];
+    static bool idInit = false;
 
-    optimistic_yield(10000);  // Yield for OTA
+    if (!idInit) {
+      snprintf(clientId, sizeof(clientId),
+              "ESP8266Client-%06X", ESP.getChipId());
+      idInit = true;
+    }
 
-    if (mqtt_client.connect(clientId.c_str(), mqtt_user, mqtt_pass, mqtt_topic_pub, 1, true, lwt_message, cleanSession)) {
+    if (mqtt_client.connect(clientId, mqtt_user, mqtt_pass, mqtt_topic_pub, qos, true, lwt_message, cleanSession)) {
       Serial.println("connected.");
-      mqtt_client.subscribe(mqtt_topic_sub_floor, qos);
-      mqtt_client.subscribe(mqtt_topic_sub_room, qos);
+      // mqtt_client.subscribe(mqtt_topic_sub_floor, qos);
+      // mqtt_client.subscribe(mqtt_topic_sub_room, qos);
       mqtt_client.subscribe(mqtt_topic_sub_unit, qos);
     } else {
       Serial.print("[MQTT] failed (rc=");
@@ -238,12 +254,51 @@ void setupMQTT() {
   mqtt_client.setKeepAlive(10); // 10 seconds
 }
 
+void publishHeartbeat() {
+// Heartbeat: Publish the last received command periodically
+  if (mqtt_client.connected() && !lastReceivedCommandJson.isEmpty()) {
+    if ((long)(millis() - lastHeartbeatTime) >= HEARTBEAT_INTERVAL_MS) {
+      bool ok = mqtt_client.publish(mqtt_topic_pub, lastReceivedCommandJson.c_str(), true); // retain = true
+      if (ok) {
+        Serial.println("[MQTT] Published state:");
+        Serial.println(lastReceivedCommandJson);
+      } else {
+        Serial.println("[MQTT] Publish failed.");
+      }
+      
+      // publishDeviceState(lastReceivedCommandJson); // New timestamp every beat
+      lastHeartbeatTime = millis();
+    }
+  }
+}
+
 // ─────────────────────────────────────────────
 // 🔄 Maintain MQTT Connection
 // ─────────────────────────────────────────────
 void handleMQTT() {
   if (!mqtt_client.connected()) {
     mqtt_reconnect();
-  }
+    yield();
+  } 
+
   mqtt_client.loop();
+  yield();
+
+  // Publish power-on status only once after the first successful MQTT connection
+  static bool initial_publish_done = false;
+  if (mqtt_client.connected() && !initial_publish_done) {
+    powerOnPublish();
+    initial_publish_done = true;
+  }
+
+  publishHeartbeat();
+  yield();
+
 }
+
+void mqttDisconnect() {
+  if (mqtt_client.connected()) {
+    mqtt_client.disconnect();
+  }
+}
+

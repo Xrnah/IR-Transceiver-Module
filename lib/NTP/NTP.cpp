@@ -21,6 +21,6 @@ String getTimestamp() {
   time_t now = time(nullptr);
   struct tm* timeinfo = localtime(&now);
   char buffer[30];
-  strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", timeinfo);
+  strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S (GMT+8)", timeinfo);
   return String(buffer);
 }
