@@ -26,7 +26,6 @@
 CustomWiFi::WiFiManager wifiManager;           // WiFi manager instance
 IRsend irsend(kIrLedPin);                      // IR transmitter
 uint16_t durations[rawDataLength];             // Pulse duration buffer
-ACU_remote APC_ACU(ACUsignature);              // IR encoder instance
 const IRProtocolConfig* selectedProtocol = &MITSUBISHI_HEAVY_64;
 
 // ─────────────────────────────────────────────
@@ -40,11 +39,11 @@ void setup() {
 
   // First, try to connect to a known hidden network. This is a blocking call.
   // If this fails, the non-blocking manager will take over.
-  // wifiManager.connectToHidden(HIDDEN_SSID, HIDDEN_PASS);
+  wifiManager.connectToHidden(HIDDEN_SSID, HIDDEN_PASS);
 
   wifiManager.begin(); // Start the non-blocking WiFi connection process
 
-  Serial.println("Connecting to WiFi...");
+  // Serial.println("Connecting to WiFi...");
   while (WiFi.status() != WL_CONNECTED) {
     wifiManager.handleConnection(); // Let the state machine run
     delay(10); // Small delay to prevent busy-waiting
@@ -54,29 +53,16 @@ void setup() {
   setupMQTTTopics();          // Build MQTT topic strings
   setupMQTT();                // Start MQTT client
   setupTime();                // Configure NTP
-
-  // Ensure MQTT is connected before publishing the initial status
-  Serial.println("[MQTT] Waiting for initial connection...");
-    while (!mqtt_client.connected()) {
-    mqtt_reconnect();
-    mqtt_client.loop();
-    delay(100);         // Small delay to yield processing time
-  } powerOnPublish();
-
 }
 
 // ─────────────────────────────────────────────
 // 🔁 Main Loop
 // ─────────────────────────────────────────────
 void loop() {
-  // ArduinoOTA.handle();      // OTA process (must always run)
-
-  wifiManager.handleConnection();             // Manage WiFi state (reconnects if needed)
-
+  wifiManager.handleConnection(); 
+  
   if (WiFi.status() == WL_CONNECTED) {
-    // if (!otaInProgress) {
-      handleMQTT();         // MQTT loop and reconnection
-    // } // MQTT paused when OTA is active
+    handleMQTT();
   }
 
   #ifdef DEBUG_IR_PRINT
