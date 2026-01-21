@@ -1,16 +1,16 @@
 # 📡 IR Transceiver Module  
 
-This repository contains the microcontroller code for the **Centralized ACU Controller** project.  
+This repository contains the microcontroller code for the **Centralized ACU Project**.  
 Asia Pacific College (APC)  
 School of Engineering (SoE)  
-Academic Year: 2024–2025  
+Academic Year: 2024–2026  
 
 ---
 
-## 🔧 Centralized ACU Controller  
+## 🔧 Centralized ACU Controller and Dashboard 
 > "The agreed requirement to pass capstone."  
 
-A subproject under the **Building Energy Management** initiative, this project aims to develop a centralized dashboard to control and monitor Air Conditioning Units (ACUs) installed in APC classrooms.
+A subproject under the **Building Energy Management** initiative, this project aims to develop the IR remote module to be deployed on each air conditioning unit (ACU) in classrooms. Accompanying the hardware is a centralized dashboard to control and monitor each transceiver.
 
 ---
 
@@ -29,8 +29,9 @@ A subproject under the **Building Energy Management** initiative, this project a
 
 ## Mitsubishi Heavy ACU Protocol
 
-The IR protocol is tailored to the **Mitsubishi Heavy FDE71VNXVG** ACU.  
-The transmitter logic is based on a reverse-engineered mobile app that worked with this unit. The official remote (RCN-E-E3) is planned for future integration.
+The IR protocol is tailored to **Mitsubishi Heavy FDE71VNXVG** ACUs.  
+The transmitter logic is reverse-engineered based on a mobile app (evidently based on the PJA502A704AA remote).  
+The official remote (RCN-E-E3) is planned for future integration.  
 
 ---
 
@@ -44,8 +45,8 @@ The transmitter logic is based on a reverse-engineered mobile app that worked wi
     - Temperature (e.g. `24`)
     - Louver position (e.g. `"swing"`, `"3"`)
 
-- **OTA (Over-the-Air) updates via local Wi-Fi**
-- **Auto-connect to APC campus Wi-Fi (pre-filled SSID table)**
+- ~~**OTA (Over-the-Air) updates via local Wi-Fi**~~
+- **Auto-connect to campus Wi-Fi (using a pre-filled SSID table)**
 - **Custom `ACU_remote_encoder` and `ACU_IR_modulator` libraries**  
   *(based on IRremoteESP8266 v2.8.6)*
 
@@ -64,20 +65,20 @@ The microcontroller receives **IR command instructions via MQTT**, structured as
 ```json
 {
   "mode": "cool",
-  "fanSpeed": 2,
+  "fan_speed": 2,
   "temperature": 24,
   "louver": 3,
-  "isOn": true
+  "power": true
 }
 ```
 ### Publish via CLI using mosquitto_pub
 ```
-mosquitto_pub -t acu/rooms/room101/set -m '{
+mosquitto_pub -t control_path/floor_id/room_id/acu_id -m '{
   "mode": "cool",
-  "fanSpeed": 2,
+  "fan_speed": 2,
   "temperature": 24,
   "louver": 3,
-  "isOn": true
+  "power": true
 }'
 ```
 
@@ -99,12 +100,13 @@ To test the remote control, you'll need to:
 - For mqtt broker configuration: [Refer to Eclipse MQTT Documentation](https://mosquitto.org/documentation/)
 
 To connect via localhost MQTT broker, 
-you must `allow_anonymous true` in mosquitto.conf.
+Set `allow_anonymous true` in mosquitto.conf (for testing).
 Then set the corresponding listener ports.
 
 Default broker configuration:
 ```
-listerner PORT#
+# Replace PORT#. default 1883
+listener PORT#
 protocol mqtt
 ```
 
