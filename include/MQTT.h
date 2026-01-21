@@ -105,12 +105,17 @@ void publishDeviceState(JsonDocument& doc) {
   }
 }
 
-void powerOnPublish() {
+void publishOnReconnect() {
   JsonDocument doc;
   char clientIdStr[32];
   snprintf(clientIdStr, sizeof(clientIdStr), "ESP8266Client-%06X", ESP.getChipId());
 
-  doc["status"] = "The device recently powered ON, send a command to update";
+  if (lastReceivedCommandJson[0] != '\0') {
+    deserializeJson(doc, lastReceivedCommandJson);
+    doc["status"] = "Connection Restored";
+  } else {
+    doc["status"] = "online";
+  }
   // Timestamp will be added by publishDeviceState
   doc["deviceID"] = clientIdStr;
   char ipStr[16];
@@ -145,7 +150,8 @@ void handleReceivedCommand(char* topic, byte* payload, unsigned int length) {
     parseBinaryToDurations(command, durations, len);
     irsend.sendRaw(durations, len, 38);
 
-    // Publish the state that was just set and store it for heartbeat
+    // Publish the state (for instanteneous feedback)
+    // then for heartbeat
     publishDeviceState(doc);
     serializeJson(doc, lastReceivedCommandJson, sizeof(lastReceivedCommandJson));
   } else {
@@ -234,6 +240,7 @@ void mqtt_reconnect() {
       // mqtt_client.subscribe(mqtt_topic_sub_floor, qos);
       // mqtt_client.subscribe(mqtt_topic_sub_room, qos);
       mqtt_client.subscribe(mqtt_topic_sub_unit, qos);
+      publishOnReconnect();
     } else {
       Serial.print("[MQTT] failed (rc=");
       Serial.print(mqtt_client.state());
@@ -276,13 +283,6 @@ void handleMQTT() {
 
   mqtt_client.loop();
   yield();
-
-  // Publish power-on status only once after the first successful MQTT connection
-  static bool initial_publish_done = false;
-  if (mqtt_client.connected() && !initial_publish_done) {
-    powerOnPublish();
-    initial_publish_done = true;
-  }
 
   publishHeartbeat();
   yield();
