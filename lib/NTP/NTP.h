@@ -12,9 +12,10 @@ extern const char* NTP_ADDR2_P;
 void setupTime();
 
 /**
- * @brief Returns current local time as a formatted string.
- * Format: YYYY-MM-DD HH:MM:SS
+ * @brief Fills a buffer with the current local time as a formatted string.
+ * Format: YYYY-MM-DD HH:MM:SS (GMT+8)
  * 
- * @return String formatted timestamp
+ * @param buffer The character buffer to write the timestamp into.
+ * @param len The size of the buffer.
  */
-String getTimestamp();
+void getTimestamp(char* buffer, size_t len);

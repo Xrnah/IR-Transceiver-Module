@@ -64,64 +64,61 @@ uint64_t ACU_remote::encodeCommand() {
   return lastCommand;
 }
 
-// ====== Utility: Convert 64-bit to Binary String ======
-String ACU_remote::toBinaryString(uint64_t value, bool spaced) {
-  String result = "";
+// ====== Utility: Convert 64-bit to Binary String Buffer ======
+void ACU_remote::toBinaryString(uint64_t value, char* buf, size_t len, bool spaced) {
+  if (!buf || len == 0) return;
+
+  char* p = buf;
   for (int i = 63; i >= 0; i--) {
-    result += ((value >> i) & 1) ? '1' : '0';
-    if (spaced && i % 4 == 0 && i != 0) result += ' ';
+    if ((size_t)(p - buf) >= len - 1) break; // Ensure space for char + null terminator
+    *p++ = ((value >> i) & 1) ? '1' : '0';
+
+    if (spaced && i > 0 && i % 4 == 0) {
+      if ((size_t)(p - buf) >= len - 1) break;
+      *p++ = ' ';
+    }
   }
-  return result;
+  *p = '\0'; // Null-terminate the string
 }
 
-// ====== Serialize state to JSON string ======
-String ACU_remote::toJSON() const {
-  String json = "{";
-  json += "\"fanSpeed\":" + String(state.fanSpeed) + ",";
-  json += "\"temperature\":" + String(state.temperature) + ",";
-  json += "\"mode\":\"" + modeToString(state.mode) + "\",";
-  json += "\"louver\":" + String(state.louver) + ",";
-  json += "\"isOn\":" + String(state.isOn ? "true" : "false") + ",";
-  json += "\"timestamp\":\"" + getTimestamp() + "\"";
-  json += "}";
-  return json;
+// ====== Serialize state to JsonObject ======
+void ACU_remote::toJSON(JsonObject doc) const {
+  doc["fanSpeed"] = state.fanSpeed;
+  doc["temperature"] = state.temperature;
+  doc["mode"] = modeToString(state.mode);
+  doc["louver"] = state.louver;
+  doc["isOn"] = state.isOn;
+  // Timestamp should be added by the caller (e.g., MQTT handler)
+  // to ensure it's the timestamp of the event, not of state creation.
 }
 
-// ====== Deserialize state from JSON string ======
+// ====== Deserialize state from JsonObject ======
 // format: {"fanSpeed":2,"temperature":24,"mode":"cool","louver":3,"isOn":true}"
-bool ACU_remote::fromJSON(const String& jsonString) {
-  StaticJsonDocument<256> doc;  // ⚠️ Using deprecated type; see notes
-  DeserializationError error = deserializeJson(doc, jsonString);
-
-  if (error) {
-    Serial.print("deserializeJson() failed: ");
-    Serial.println(error.c_str());
-    return false;
-  }
-
+bool ACU_remote::fromJSON(JsonObjectConst doc) {
   // Validate and extract all required fields
   if (!doc["fanSpeed"].is<uint8_t>() ||
       !doc["temperature"].is<uint8_t>() ||
       !doc["mode"].is<const char*>() ||
       !doc["louver"].is<uint8_t>() ||
       !doc["isOn"].is<bool>()) {
+    Serial.println("fromJSON: Invalid or missing fields.");
     return false;
   }
 
   // Extract and convert values
   uint8_t fanSpeed = doc["fanSpeed"];
   uint8_t temp = doc["temperature"];
-  String modeStr = doc["mode"].as<String>();
+  const char* modeStr = doc["mode"];
   uint8_t louver = doc["louver"];
   bool isOn = doc["isOn"];
 
   // Convert mode string to enum
   ACUMode mode;
-  if (modeStr == "auto") mode = ACUMode::AUTO;
-  else if (modeStr == "cool") mode = ACUMode::COOL;
-  else if (modeStr == "heat") mode = ACUMode::HEAT;
-  else if (modeStr == "dry") mode = ACUMode::DRY;
-  else if (modeStr == "fan") mode = ACUMode::FAN;
+  if (strcmp(modeStr, "auto") == 0) mode = ACUMode::AUTO;
+  else if (strcmp(modeStr, "cool") == 0) mode = ACUMode::COOL;
+  else if (strcmp(modeStr, "heat") == 0) mode = ACUMode::HEAT;
+  else if (strcmp(modeStr, "dry") == 0) mode = ACUMode::DRY;
+  else if (strcmp(modeStr, "fan") == 0) mode = ACUMode::FAN;
   else return false;  // Unrecognized mode
 
   setState(fanSpeed, temp, mode, louver, isOn);
@@ -204,7 +201,7 @@ uint8_t ACU_remote::encodeLouver() const {
 }
 
 // Convert ACUMode enum to human-readable string
-String ACU_remote::modeToString(ACUMode mode) const {
+const char* ACU_remote::modeToString(ACUMode mode) const {
   switch (mode) {
     case ACUMode::AUTO: return "auto";
     case ACUMode::COOL: return "cool";

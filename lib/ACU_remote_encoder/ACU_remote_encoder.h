@@ -81,14 +81,14 @@ public:
   uint64_t encodeCommand();
 
   // === Utilities ===
-  // Convert 64-bit command to binary string, optionally spaced every 4 bits
-  static String toBinaryString(uint64_t value, bool spaced = true);
+  // Fills a buffer with the binary string representation of a 64-bit value
+  static void toBinaryString(uint64_t value, char* buf, size_t len, bool spaced = true);
 
-  // Serialize current state to JSON string
-  String toJSON() const;
+  // Serialize current state into a JsonObject
+  void toJSON(JsonObject doc) const;
 
-  // Deserialize JSON string into internal state
-  bool fromJSON(const String& jsonString);
+  // Deserialize a JsonObject into internal state
+  bool fromJSON(JsonObjectConst doc);
 
 private:
   String signature;           // AC brand/protocol identifier
@@ -102,6 +102,6 @@ private:
   uint8_t encodeMode() const;          // Encodes mode + power state
   uint8_t encodeLouver() const;        // Louver encoding
 
-  // Converts enum mode to string (for JSON)
-  String modeToString(ACUMode mode) const;
+  // Converts enum mode to its string representation
+  const char* modeToString(ACUMode mode) const;
 };

@@ -17,10 +17,8 @@ void setupTime() {
   Serial.println("\n[NTP] Time synchronized.");
 }
 
-String getTimestamp() {
+void getTimestamp(char* buffer, size_t len) {
   time_t now = time(nullptr);
   struct tm* timeinfo = localtime(&now);
-  char buffer[30];
-  strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S (GMT+8)", timeinfo);
-  return String(buffer);
+  strftime(buffer, len, "%Y-%m-%d %H:%M:%S (GMT+8)", timeinfo);
 }

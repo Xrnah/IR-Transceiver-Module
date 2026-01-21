@@ -25,6 +25,7 @@
 #include "ACU_remote_encoder.h"
 #include "ACU_IR_modulator.h"
 #include <NTP.h>  // For getTimestamp()
+#include <pgmspace.h>
 #include "secrets.h" // Credentials
 
 // ─────────────────────────────────────────────
@@ -47,7 +48,8 @@ const char* floor_id = DEFINED_FLOOR;
 const char* room_id = DEFINED_ROOM;
 const char* unit_id = DEFINED_UNIT;
 
-char lwt_message[] = "{\"status\":\"offline\"}";
+const char lwt_message_json[] PROGMEM = "{\"status\":\"offline\"}";
+char lwt_message[sizeof(lwt_message_json)]; // Buffer to hold LWT message from PROGMEM
 
 // sample json query:
 // {"fanSpeed":2,"temperature":24,"mode":"cool","louver":3,"isOn":true}
@@ -74,86 +76,78 @@ PubSubClient mqtt_client(espClient);
 ACU_remote remote("MITSUBISHI_HEAVY_64");
 
 // Heartbeat variables
-String lastReceivedCommandJson;
+char lastReceivedCommandJson[256] = {0};
 unsigned long lastHeartbeatTime = 0;
 const long HEARTBEAT_INTERVAL_MS = 15000; // 15 seconds
 // ─────────────────────────────────────────────
 // 📤 Publish state to dashboard
 // ─────────────────────────────────────────────
-void publishDeviceState(const String& jsonPayload) {
+void publishDeviceState(JsonDocument& doc) {
   if (!mqtt_client.connected()) {
     Serial.println("[MQTT] Not connected, skipping publish.");
     return;
   }
 
-  StaticJsonDocument<512> doc;
-  DeserializationError err = deserializeJson(doc, jsonPayload);
-  if (err) {
-    Serial.println("[MQTT] Failed to parse input JSON for publishing");
-    return;
-  }
+  // Add/update timestamp just before publishing
+  char timeBuffer[30];
+  getTimestamp(timeBuffer, sizeof(timeBuffer));
+  doc["timestamp"] = timeBuffer;
 
-  // To do: Remove getTimestamp to avoid WDT resets
-  //   Make a backend service to refer
-  if (!doc.containsKey("timestamp")) {
-    doc["timestamp"] = getTimestamp();
-  }
+  char output[512];
+  size_t len = serializeJson(doc, output, sizeof(output));
 
-  String timestampedJson;
-  yield();
-  serializeJson(doc, timestampedJson);
-  yield();
-
-  bool ok = mqtt_client.publish(mqtt_topic_pub, timestampedJson.c_str(), true); // retain = true
+  bool ok = mqtt_client.publish(mqtt_topic_pub, (const uint8_t*)output, len, true); // retain = true
   if (ok) {
     Serial.println("[MQTT] Published state with timestamp:");
-    Serial.println(timestampedJson);
+    Serial.println(output);
   } else {
     Serial.println("[MQTT] Publish failed.");
   }
 }
 
 void powerOnPublish() {
-  StaticJsonDocument<256> doc;
-  String powerOnTimestamp = "Powered ON @: " + getTimestamp();
-  String clientId = "ESP8266Client-" + String(ESP.getChipId());
+  JsonDocument doc;
+  char clientIdStr[32];
+  snprintf(clientIdStr, sizeof(clientIdStr), "ESP8266Client-%06X", ESP.getChipId());
 
   doc["status"] = "The device recently powered ON, send a command to update";
-  // doc["timestamp"] = powerOnTimestamp;
-  doc["timestamp"] = getTimestamp();
-  doc["deviceID"] = clientId;
-  doc["deviceIP"] = WiFi.localIP().toString();
+  // Timestamp will be added by publishDeviceState
+  doc["deviceID"] = clientIdStr;
+  char ipStr[16];
+  WiFi.localIP().toString().toCharArray(ipStr, sizeof(ipStr));
+  doc["deviceIP"] = ipStr;
 
-  String initial_status;
-  serializeJson(doc, initial_status);
-  publishDeviceState(initial_status); // Publishes the JSON string with the custom timestamp
+  publishDeviceState(doc);
 }
 
 // ─────────────────────────────────────────────
 // 📥 Handle Incoming Commands
 // ─────────────────────────────────────────────
 void handleReceivedCommand(char* topic, byte* payload, unsigned int length) {
-  StaticJsonDocument<256> doc;
+  JsonDocument doc;
   DeserializationError err = deserializeJson(doc, payload, length);
   if (err) {
     Serial.println("[MQTT] JSON parse failed");
     return;
   }
 
-  String jsonStr;
-  serializeJson(doc, jsonStr);
-
-  if (remote.fromJSON(jsonStr)) {
+  if (remote.fromJSON(doc.as<JsonObjectConst>())) {
     uint64_t command = remote.encodeCommand();
     Serial.println("[MQTT] JSON parsed and encoded:");
-    Serial.println(ACU_remote::toBinaryString(command, true));
+
+    char binaryStr[100]; // Buffer for binary string representation (64 bits + 15 spaces + null)
+    ACU_remote::toBinaryString(command, binaryStr, sizeof(binaryStr), true);
+    Serial.println(binaryStr);
+
+    yield(); // Allow ESP8266 to handle background tasks before blocking IR send
 
     size_t len = 0;
     parseBinaryToDurations(command, durations, len);
     irsend.sendRaw(durations, len, 38);
 
-    publishDeviceState(jsonStr);
-    lastReceivedCommandJson = jsonStr; // Store the last successfully processed command for heartbeat
+    // Publish the state that was just set and store it for heartbeat
+    publishDeviceState(doc);
+    serializeJson(doc, lastReceivedCommandJson, sizeof(lastReceivedCommandJson));
   } else {
     Serial.println("[MQTT] Invalid command structure.");
   }
@@ -167,30 +161,31 @@ bool topicMatchesModule(char* topic) {
   // control/floor
   // control/floor/room
   // control/floor/room/unit
+  const char* prefix = "control/";
+  if (strncmp(topic, prefix, strlen(prefix)) != 0) {
+      return false;
+  }
 
-  String t = String(topic);
-  t.trim();
-  if (!t.startsWith("control/")) return false;
+  char topicCopy[128];
+  strncpy(topicCopy, topic, sizeof(topicCopy) - 1);
+  topicCopy[sizeof(topicCopy) - 1] = '\0';
 
-  // Split by '/'
-  int idx1 = t.indexOf('/', 0);           // after 'control'
-  int idx2 = t.indexOf('/', idx1 + 1);    // after floor
-  int idx3 = t.indexOf('/', idx2 + 1);    // after room
+  char* rest = topicCopy + strlen(prefix);
+  char* part;
 
-  String floor = t.substring(idx1 + 1, (idx2 == -1 ? t.length() : idx2));
-  if (floor != floor_id) return false;
+  // Check floor
+  part = strtok(rest, "/");
+  if (!part || strcmp(part, floor_id) != 0) return false;
 
-  // Only floor match → OK
-  if (idx2 == -1) return true;
+  // Check room
+  part = strtok(NULL, "/");
+  if (!part) return true; // Matches floor only
+  if (strcmp(part, room_id) != 0) return false;
 
-  String room = t.substring(idx2 + 1, (idx3 == -1 ? t.length() : idx3));
-  if (room != room_id) return false;
-
-  // Floor + room match → OK
-  if (idx3 == -1) return true;
-
-  String unit = t.substring(idx3 + 1);
-  return (unit == unit_id);
+  // Check unit
+  part = strtok(NULL, "/");
+  if (!part) return true; // Matches floor/room
+  return (strcmp(part, unit_id) == 0);
 }
 
 // ─────────────────────────────────────────────
@@ -229,6 +224,8 @@ void mqtt_reconnect() {
     if (!idInit) {
       snprintf(clientId, sizeof(clientId),
               "ESP8266Client-%06X", ESP.getChipId());
+      // Copy LWT message from PROGMEM to RAM buffer
+      strcpy_P(lwt_message, lwt_message_json);
       idInit = true;
     }
 
@@ -256,17 +253,13 @@ void setupMQTT() {
 
 void publishHeartbeat() {
 // Heartbeat: Publish the last received command periodically
-  if (mqtt_client.connected() && !lastReceivedCommandJson.isEmpty()) {
+  if (mqtt_client.connected() && lastReceivedCommandJson[0] != '\0') {
     if ((long)(millis() - lastHeartbeatTime) >= HEARTBEAT_INTERVAL_MS) {
-      bool ok = mqtt_client.publish(mqtt_topic_pub, lastReceivedCommandJson.c_str(), true); // retain = true
-      if (ok) {
-        Serial.println("[MQTT] Published state:");
-        Serial.println(lastReceivedCommandJson);
-      } else {
-        Serial.println("[MQTT] Publish failed.");
-      }
-      
-      // publishDeviceState(lastReceivedCommandJson); // New timestamp every beat
+      JsonDocument doc;
+      deserializeJson(doc, lastReceivedCommandJson);
+
+      // This will re-publish the last state with an updated timestamp
+      publishDeviceState(doc);
       lastHeartbeatTime = millis();
     }
   }
@@ -301,4 +294,3 @@ void mqttDisconnect() {
     mqtt_client.disconnect();
   }
 }
-
