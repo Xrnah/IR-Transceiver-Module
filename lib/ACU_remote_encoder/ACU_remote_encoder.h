@@ -47,11 +47,11 @@ enum class ACUMode {
 
 // Struct representing the complete AC unit state.
 struct ACUState {
-  uint8_t fanSpeed = 0;          // Fan speed (1–4 typically)
+  uint8_t fan_speed = 0;          // Fan speed (1–4 typically)
   uint8_t temperature = 0;       // Temperature in °C (usually 18–30)
   ACUMode mode = ACUMode::AUTO;  // Operating mode
   uint8_t louver = 0;            // Louver position (e.g., 1–4)
-  bool isOn = true;              // Power state
+  bool power = true;              // Power state
 };
 
 // ====== Main Class: ACU_remote ======
@@ -62,14 +62,14 @@ public:
   ACU_remote(String signature);
 
   // === State Setters ===
-  void setFanSpeed(uint8_t speed);
+  void setfan_speed(uint8_t speed);
   void setTemperature(uint8_t temp);
   void setMode(ACUMode mode);
   void setLouver(uint8_t louver);
   void setPowerState(bool on);
 
   // Set full state at once
-  void setState(uint8_t fanSpeed, uint8_t temp, ACUMode mode, uint8_t louver, bool isOn = true);
+  void setState(uint8_t fan_speed, uint8_t temp, ACUMode mode, uint8_t louver, bool power = true);
 
   // === State Getters ===
   bool getPowerState() const;
@@ -97,7 +97,7 @@ private:
 
   // === Encoding Helpers ===
   uint8_t encodeSignature() const;     // Brand-specific 4-bit identifier
-  uint8_t encodeFanSpeed() const;      // Fan speed encoding
+  uint8_t encodefan_speed() const;      // Fan speed encoding
   uint8_t encodeTemperature() const;   // Temperature encoding
   uint8_t encodeMode() const;          // Encodes mode + power state
   uint8_t encodeLouver() const;        // Louver encoding

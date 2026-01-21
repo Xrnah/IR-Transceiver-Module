@@ -6,8 +6,8 @@ ACU_remote::ACU_remote(String signature)
 
 // ====== State Setters ======
 // Individually set parts of the remote control state
-void ACU_remote::setFanSpeed(uint8_t speed) {
-  state.fanSpeed = speed;
+void ACU_remote::setfan_speed(uint8_t speed) {
+  state.fan_speed = speed;
 }
 void ACU_remote::setTemperature(uint8_t temp) {
   state.temperature = temp;
@@ -19,21 +19,21 @@ void ACU_remote::setLouver(uint8_t louver) {
   state.louver = louver;
 }
 void ACU_remote::setPowerState(bool on) {
-  state.isOn = on;
+  state.power = on;
 }
 
 // Set entire ACU state in one call
-void ACU_remote::setState(uint8_t fanSpeed, uint8_t temp, ACUMode mode, uint8_t louver, bool isOn) {
-  state.fanSpeed = fanSpeed;
+void ACU_remote::setState(uint8_t fan_speed, uint8_t temp, ACUMode mode, uint8_t louver, bool power) {
+  state.fan_speed = fan_speed;
   state.temperature = temp;
   state.mode = mode;
   state.louver = louver;
-  state.isOn = isOn;
+  state.power = power;
 }
 
 // ====== State Getters ======
 bool ACU_remote::getPowerState() const {
-  return state.isOn;
+  return state.power;
 }
 
 uint64_t ACU_remote::getLastCommand() const {
@@ -53,7 +53,7 @@ uint64_t ACU_remote::encodeCommand() {
   command |= ((uint32_t)encodeSignature() << 28);    // Signature (e.g., brand ID)
   command |= (0b0000 << 24);                         // Reserved bits
   command |= (0b0000 << 20);                         // Reserved bits
-  command |= ((uint32_t)encodeFanSpeed() << 16);     // Fan speed
+  command |= ((uint32_t)encodefan_speed() << 16);     // Fan speed
   command |= ((uint32_t)encodeTemperature() << 12);  // Temperature
   command |= ((uint32_t)encodeMode() << 8);          // Mode + power state
   command |= (0b0000 << 4);                          // Reserved bits
@@ -83,34 +83,34 @@ void ACU_remote::toBinaryString(uint64_t value, char* buf, size_t len, bool spac
 
 // ====== Serialize state to JsonObject ======
 void ACU_remote::toJSON(JsonObject doc) const {
-  doc["fanSpeed"] = state.fanSpeed;
+  doc["fan_speed"] = state.fan_speed;
   doc["temperature"] = state.temperature;
   doc["mode"] = modeToString(state.mode);
   doc["louver"] = state.louver;
-  doc["isOn"] = state.isOn;
+  doc["power"] = state.power;
   // Timestamp should be added by the caller (e.g., MQTT handler)
   // to ensure it's the timestamp of the event, not of state creation.
 }
 
 // ====== Deserialize state from JsonObject ======
-// format: {"fanSpeed":2,"temperature":24,"mode":"cool","louver":3,"isOn":true}"
+// format: {"fan_speed":2,"temperature":24,"mode":"cool","louver":3,"power":true}"
 bool ACU_remote::fromJSON(JsonObjectConst doc) {
   // Validate and extract all required fields
-  if (!doc["fanSpeed"].is<uint8_t>() ||
+  if (!doc["fan_speed"].is<uint8_t>() ||
       !doc["temperature"].is<uint8_t>() ||
       !doc["mode"].is<const char*>() ||
       !doc["louver"].is<uint8_t>() ||
-      !doc["isOn"].is<bool>()) {
+      !doc["power"].is<bool>()) {
     Serial.println("fromJSON: Invalid or missing fields.");
     return false;
   }
 
   // Extract and convert values
-  uint8_t fanSpeed = doc["fanSpeed"];
+  uint8_t fan_speed = doc["fan_speed"];
   uint8_t temp = doc["temperature"];
   const char* modeStr = doc["mode"];
   uint8_t louver = doc["louver"];
-  bool isOn = doc["isOn"];
+  bool power = doc["power"];
 
   // Convert mode string to enum
   ACUMode mode;
@@ -121,7 +121,7 @@ bool ACU_remote::fromJSON(JsonObjectConst doc) {
   else if (strcmp(modeStr, "fan") == 0) mode = ACUMode::FAN;
   else return false;  // Unrecognized mode
 
-  setState(fanSpeed, temp, mode, louver, isOn);
+  setState(fan_speed, temp, mode, louver, power);
   return true;
 }
 
@@ -134,8 +134,8 @@ uint8_t ACU_remote::encodeSignature() const {
 }
 
 // Fan speed encoded as 4 bits
-uint8_t ACU_remote::encodeFanSpeed() const {
-  switch (state.fanSpeed) {
+uint8_t ACU_remote::encodefan_speed() const {
+  switch (state.fan_speed) {
     case 1: return 0b0000;
     case 2: return 0b1000;
     case 3: return 0b0100;
@@ -180,7 +180,7 @@ uint8_t ACU_remote::encodeMode() const {
     default: base = 0b0000; break;
   }
 
-  if (!state.isOn) base &= ~0b0001;  // If off, clear LSB (power off)
+  if (!state.power) base &= ~0b0001;  // If off, clear LSB (power off)
   return base;
 }
 

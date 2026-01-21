@@ -52,7 +52,7 @@ const char lwt_message_json[] PROGMEM = "{\"status\":\"offline\"}";
 char lwt_message[sizeof(lwt_message_json)]; // Buffer to hold LWT message from PROGMEM
 
 // sample json query:
-// {"fanSpeed":2,"temperature":24,"mode":"cool","louver":3,"isOn":true}
+// {"fan_speed":2,"temperature":24,"mode":"cool","louver":3,"power":true}
 #define qos 1 // Quality of Service
 #define cleanSession false
 
@@ -60,14 +60,20 @@ char lwt_message[sizeof(lwt_message_json)]; // Buffer to hold LWT message from P
 // char mqtt_topic_sub_floor[64];
 // char mqtt_topic_sub_room[64];
 char mqtt_topic_sub_unit[64];
-char mqtt_topic_pub[80];
+char mqtt_topic_pub_state[80];
+char mqtt_topic_pub_identity[80];
+char mqtt_topic_pub_deployment[80];
+char mqtt_topic_pub_diagnostics[80];
 
 // ─────────────────────────────────────────────
 // 🔨 Topic Construction (call in setup)
 // ─────────────────────────────────────────────
 void setupMQTTTopics() {
   snprintf(mqtt_topic_sub_unit,  sizeof(mqtt_topic_sub_unit),  "%s/%s/%s/%s", control_root, floor_id, room_id, unit_id);
-  snprintf(mqtt_topic_pub,       sizeof(mqtt_topic_pub),       "%s/%s/%s/%s-status", state_root, floor_id, room_id, unit_id);
+  snprintf(mqtt_topic_pub_state,       sizeof(mqtt_topic_pub_state),       "%s/%s/%s/%s/state",       state_root, floor_id, room_id, unit_id);
+  snprintf(mqtt_topic_pub_identity,    sizeof(mqtt_topic_pub_identity),    "%s/%s/%s/%s/identity",    state_root, floor_id, room_id, unit_id);
+  snprintf(mqtt_topic_pub_deployment,  sizeof(mqtt_topic_pub_deployment),  "%s/%s/%s/%s/deployment",  state_root, floor_id, room_id, unit_id);
+  snprintf(mqtt_topic_pub_diagnostics, sizeof(mqtt_topic_pub_diagnostics), "%s/%s/%s/%s/diagnostics", state_root, floor_id, room_id, unit_id);
 }
 
 // Clients and encoder instance
@@ -78,51 +84,102 @@ ACU_remote remote("MITSUBISHI_HEAVY_64");
 // Heartbeat variables
 char lastReceivedCommandJson[256] = {0};
 unsigned long lastHeartbeatTime = 0;
+char lastCommandTimestamp[30] = {0};
+char lastChangeTimestamp[30] = {0};
 const long HEARTBEAT_INTERVAL_MS = 15000; // 15 seconds
 // ─────────────────────────────────────────────
 // 📤 Publish state to dashboard
 // ─────────────────────────────────────────────
-void publishDeviceState(JsonDocument& doc) {
+void publishACUState(JsonDocument& sourceDoc) {
   if (!mqtt_client.connected()) {
     Serial.println("[MQTT] Not connected, skipping publish.");
     return;
   }
 
-  // Add/update timestamp just before publishing
-  char timeBuffer[30];
-  getTimestamp(timeBuffer, sizeof(timeBuffer));
-  doc["timestamp"] = timeBuffer;
+  JsonDocument stateDoc;
+  
+  // Map internal keys to schema
+  if (sourceDoc.containsKey("temperature")) stateDoc["temperature"] = sourceDoc["temperature"];
+  if (sourceDoc.containsKey("fan_speed"))    stateDoc["fan_speed"]    = sourceDoc["fan_speed"];
+  if (sourceDoc.containsKey("mode"))        stateDoc["mode"]        = sourceDoc["mode"];
+  if (sourceDoc.containsKey("louver"))      stateDoc["louver"]      = sourceDoc["louver"];
+  if (sourceDoc.containsKey("power"))        stateDoc["power"]        = sourceDoc["power"];
 
-  char output[512];
-  size_t len = serializeJson(doc, output, sizeof(output));
+  if (lastChangeTimestamp[0] != '\0') {
+    stateDoc["last_change_ts"] = lastChangeTimestamp;
+  }
 
-  bool ok = mqtt_client.publish(mqtt_topic_pub, (const uint8_t*)output, len, true); // retain = true
+  char output[256];
+  size_t len = serializeJson(stateDoc, output, sizeof(output));
+
+  bool ok = mqtt_client.publish(mqtt_topic_pub_state, (const uint8_t*)output, len, true); // retain = true
   if (ok) {
-    Serial.println("[MQTT] Published state with timestamp:");
+    Serial.println("[MQTT] Published state:");
     Serial.println(output);
   } else {
     Serial.println("[MQTT] Publish failed.");
   }
 }
 
-void publishOnReconnect() {
+void publishIdentity() {
+  if (!mqtt_client.connected()) return;
   JsonDocument doc;
   char clientIdStr[32];
   snprintf(clientIdStr, sizeof(clientIdStr), "ESP8266Client-%06X", ESP.getChipId());
+  
+  doc["device_id"] = clientIdStr;
+  doc["acu_remote_model"] = ACU_REMOTE_MODEL; 
+  doc["room_type"] = DEFINED_ROOM_TYPE;
+  doc["department"] = DEFINED_DEPARTMENT;
 
-  if (lastReceivedCommandJson[0] != '\0') {
-    deserializeJson(doc, lastReceivedCommandJson);
-    doc["status"] = "Connection Restored";
-  } else {
-    doc["status"] = "online";
+  char output[256];
+  serializeJson(doc, output);
+  mqtt_client.publish(mqtt_topic_pub_identity, output, true); // Retain static info
+}
+
+void publishDeployment() {
+  if (!mqtt_client.connected()) return;
+  JsonDocument doc;
+  doc["ip_address"] = WiFi.localIP().toString();
+  doc["deployment_date"] = DEFINED_DEPLOYMENT_DATE;
+  doc["version_hash"] = DEFINED_VERSION_HASH;
+
+  char output[256];
+  serializeJson(doc, output);
+  mqtt_client.publish(mqtt_topic_pub_deployment, output, true); // Retain static info
+}
+
+void publishDiagnostics() {
+  if (!mqtt_client.connected()) return;
+  JsonDocument doc;
+  doc["uptime_s"] = millis() / 1000;
+  doc["status"] = "online";
+  
+  // Add timestamp
+  char timeBuffer[30];
+  getTimestamp(timeBuffer, sizeof(timeBuffer));
+  doc["last_diag_ts"] = timeBuffer;
+
+  if (lastCommandTimestamp[0] != '\0') {
+    doc["last_cmd_ts"] = lastCommandTimestamp;
   }
-  // Timestamp will be added by publishDeviceState
-  doc["deviceID"] = clientIdStr;
-  char ipStr[16];
-  WiFi.localIP().toString().toCharArray(ipStr, sizeof(ipStr));
-  doc["deviceIP"] = ipStr;
 
-  publishDeviceState(doc);
+  char output[256];
+  serializeJson(doc, output);
+  mqtt_client.publish(mqtt_topic_pub_diagnostics, output, false); // Do not retain dynamic diagnostics
+}
+
+void publishOnReconnect() {
+  publishIdentity();
+  publishDeployment();
+  publishDiagnostics();
+
+  // Republish last known state if available
+  if (lastReceivedCommandJson[0] != '\0') {
+    JsonDocument doc;
+    deserializeJson(doc, lastReceivedCommandJson);
+    publishACUState(doc);
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -136,7 +193,10 @@ void handleReceivedCommand(char* topic, byte* payload, unsigned int length) {
     return;
   }
 
-  if (remote.fromJSON(doc.as<JsonObjectConst>())) {
+  // Handle potential nested "state" object in new control format
+  JsonObjectConst stateObj = doc.containsKey("state") ? doc["state"] : doc.as<JsonObjectConst>();
+
+  if (remote.fromJSON(stateObj)) {
     uint64_t command = remote.encodeCommand();
     Serial.println("[MQTT] JSON parsed and encoded:");
 
@@ -150,10 +210,34 @@ void handleReceivedCommand(char* topic, byte* payload, unsigned int length) {
     parseBinaryToDurations(command, durations, len);
     irsend.sendRaw(durations, len, 38);
 
-    // Publish the state (for instanteneous feedback)
-    // then for heartbeat
-    publishDeviceState(doc);
-    serializeJson(doc, lastReceivedCommandJson, sizeof(lastReceivedCommandJson));
+    // Create a mutable copy of the state for publishing/storage
+    JsonDocument stateDoc;
+    stateDoc.set(stateObj);
+
+    // Check if state has changed compared to last received command
+    bool stateChanged = false;
+    if (lastReceivedCommandJson[0] == '\0') {
+      stateChanged = true;
+    } else {
+      JsonDocument prevDoc;
+      deserializeJson(prevDoc, lastReceivedCommandJson);
+      if (stateDoc != prevDoc) stateChanged = true;
+    }
+
+    if (stateChanged) {
+      char timeBuffer[30];
+      getTimestamp(timeBuffer, sizeof(timeBuffer));
+      strncpy(lastChangeTimestamp, timeBuffer, sizeof(lastChangeTimestamp));
+    }
+
+    publishACUState(stateDoc);
+
+    // Update last command timestamp
+    char timeBuffer[30];
+    getTimestamp(timeBuffer, sizeof(timeBuffer));
+    strncpy(lastCommandTimestamp, timeBuffer, sizeof(lastCommandTimestamp));
+    publishDiagnostics(); // Update diagnostics (last_cmd_ts)
+    serializeJson(stateDoc, lastReceivedCommandJson, sizeof(lastReceivedCommandJson));
   } else {
     Serial.println("[MQTT] Invalid command structure.");
   }
@@ -163,35 +247,7 @@ void handleReceivedCommand(char* topic, byte* payload, unsigned int length) {
 // 📥 Handle Conflicting Topic (from retained/false-cleanSessions)
 // ─────────────────────────────────────────────
 bool topicMatchesModule(char* topic) {
-  // Expected forms:
-  // control/floor
-  // control/floor/room
-  // control/floor/room/unit
-  const char* prefix = "control/";
-  if (strncmp(topic, prefix, strlen(prefix)) != 0) {
-      return false;
-  }
-
-  char topicCopy[128];
-  strncpy(topicCopy, topic, sizeof(topicCopy) - 1);
-  topicCopy[sizeof(topicCopy) - 1] = '\0';
-
-  char* rest = topicCopy + strlen(prefix);
-  char* part;
-
-  // Check floor
-  part = strtok(rest, "/");
-  if (!part || strcmp(part, floor_id) != 0) return false;
-
-  // Check room
-  part = strtok(NULL, "/");
-  if (!part) return true; // Matches floor only
-  if (strcmp(part, room_id) != 0) return false;
-
-  // Check unit
-  part = strtok(NULL, "/");
-  if (!part) return true; // Matches floor/room
-  return (strcmp(part, unit_id) == 0);
+  return strcmp(topic, mqtt_topic_sub_unit) == 0;
 }
 
 // ─────────────────────────────────────────────
@@ -235,7 +291,7 @@ void mqtt_reconnect() {
       idInit = true;
     }
 
-    if (mqtt_client.connect(clientId, mqtt_user, mqtt_pass, mqtt_topic_pub, qos, true, lwt_message, cleanSession)) {
+    if (mqtt_client.connect(clientId, mqtt_user, mqtt_pass, mqtt_topic_pub_diagnostics, qos, true, lwt_message, cleanSession)) {
       Serial.println("connected.");
       // mqtt_client.subscribe(mqtt_topic_sub_floor, qos);
       // mqtt_client.subscribe(mqtt_topic_sub_room, qos);
@@ -262,11 +318,12 @@ void publishHeartbeat() {
 // Heartbeat: Publish the last received command periodically
   if (mqtt_client.connected() && lastReceivedCommandJson[0] != '\0') {
     if ((long)(millis() - lastHeartbeatTime) >= HEARTBEAT_INTERVAL_MS) {
-      JsonDocument doc;
-      deserializeJson(doc, lastReceivedCommandJson);
+      // JsonDocument doc;
+      // deserializeJson(doc, lastReceivedCommandJson);
 
-      // This will re-publish the last state with an updated timestamp
-      publishDeviceState(doc);
+      // // This will re-publish the last state with an updated timestamp
+      // publishACUState(doc);
+      publishDiagnostics();
       lastHeartbeatTime = millis();
     }
   }
