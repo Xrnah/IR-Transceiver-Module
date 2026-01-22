@@ -69,7 +69,7 @@ char mqtt_topic_pub_diagnostics[80];
 // 🔨 Topic Construction (call in setup)
 // ─────────────────────────────────────────────
 void setupMQTTTopics() {
-  snprintf(mqtt_topic_sub_unit,  sizeof(mqtt_topic_sub_unit),  "%s/%s/%s/%s", control_root, floor_id, room_id, unit_id);
+  snprintf(mqtt_topic_sub_unit,        sizeof(mqtt_topic_sub_unit),        "%s/%s/%s/%s",           control_root, floor_id, room_id, unit_id);
   snprintf(mqtt_topic_pub_state,       sizeof(mqtt_topic_pub_state),       "%s/%s/%s/%s/state",       state_root, floor_id, room_id, unit_id);
   snprintf(mqtt_topic_pub_identity,    sizeof(mqtt_topic_pub_identity),    "%s/%s/%s/%s/identity",    state_root, floor_id, room_id, unit_id);
   snprintf(mqtt_topic_pub_deployment,  sizeof(mqtt_topic_pub_deployment),  "%s/%s/%s/%s/deployment",  state_root, floor_id, room_id, unit_id);
@@ -314,15 +314,10 @@ void setupMQTT() {
   mqtt_client.setKeepAlive(10); // 10 seconds
 }
 
+// Publish heartbeat on connection
 void publishHeartbeat() {
-// Heartbeat: Publish the last received command periodically
-  if (mqtt_client.connected() && lastReceivedCommandJson[0] != '\0') {
+  if (mqtt_client.connected()) {
     if ((long)(millis() - lastHeartbeatTime) >= HEARTBEAT_INTERVAL_MS) {
-      // JsonDocument doc;
-      // deserializeJson(doc, lastReceivedCommandJson);
-
-      // // This will re-publish the last state with an updated timestamp
-      // publishACUState(doc);
       publishDiagnostics();
       lastHeartbeatTime = millis();
     }
