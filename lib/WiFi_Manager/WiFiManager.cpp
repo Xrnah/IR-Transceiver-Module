@@ -49,6 +49,17 @@ void CustomWiFi::WiFiManager::begin() {
   }
 }
 
+void CustomWiFi::WiFiManager::begin(const char* ssid, const char* pass) {
+  strncpy(hidden_ssid, ssid ? ssid : "", sizeof(hidden_ssid) - 1);
+  hidden_ssid[sizeof(hidden_ssid) - 1] = '\0';
+  strncpy(hidden_pass, pass ? pass : "", sizeof(hidden_pass) - 1);
+  hidden_pass[sizeof(hidden_pass) - 1] = '\0';
+
+  WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(false);
+  currentState = CustomWiFi::WiFiState::DISCONNECTED;
+}
+
 void CustomWiFi::WiFiManager::handleConnection() {
   
   switch (currentState) {
@@ -147,9 +158,12 @@ void CustomWiFi::WiFiManager::checkConnectionProgress() {
   }
 }
 
+// Deprecated (012226): connectToHidden() is implemented as an overload of begin().
 bool CustomWiFi::WiFiManager::connectToHidden(const char* ssid, const char* pass) {
-  strncpy(hidden_ssid, ssid ? ssid : "", SSID_MAX_LEN - 1);
-  strncpy(hidden_pass, pass ? pass : "", PASS_MAX_LEN - 1);
+  strncpy(hidden_ssid, ssid ? ssid : "", sizeof(hidden_ssid) - 1);
+  hidden_ssid[sizeof(hidden_ssid) - 1] = '\0'; // Ensure null-termination
+  strncpy(hidden_pass, pass ? pass : "", sizeof(hidden_pass) - 1);
+  hidden_pass[sizeof(hidden_pass) - 1] = '\0'; // Ensure null-termination
   WiFi.mode(WIFI_STA);
   currentState = CustomWiFi::WiFiState::DISCONNECTED;
   return true;

@@ -23,6 +23,7 @@ namespace CustomWiFi {
   public:
     WiFiManager();
     void begin();
+    void begin(const char* ssid, const char* pass);
     void handleConnection();
     bool connectToHidden(const char* ssid, const char* pass);
 
