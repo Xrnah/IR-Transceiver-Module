@@ -141,8 +141,10 @@ void publishDeployment() {
   if (!mqtt_client.connected()) return;
   JsonDocument doc;
   doc["ip_address"] = WiFi.localIP().toString();
-  doc["deployment_date"] = DEFINED_DEPLOYMENT_DATE;
-  doc["version_hash"] = DEFINED_VERSION_HASH;
+  // doc["deployment_date"] = DEFINED_DEPLOYMENT_DATE;
+  // doc["version_hash"] = DEFINED_VERSION_HASH;
+  doc["version_hash"] = GIT_HASH;
+  doc["build_timestamp"] = BUILD_TIMESTAMP;
 
   char output[256];
   serializeJson(doc, output);

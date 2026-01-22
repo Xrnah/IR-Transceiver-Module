@@ -12,6 +12,14 @@
 #define HIDDEN_PASS ""
 #endif
 
+#ifndef GIT_HASH
+#define GIT_HASH "unknown"
+#endif
+
+#ifndef BUILD_TIMESTAMP
+#define BUILD_TIMESTAMP "unknown"
+#endif
+
 // Custom Libraries
 #include "WiFiManager.h"           // WiFi connection manager class
 // #include "OTA_config.h"            // OTA setup and event handlers
