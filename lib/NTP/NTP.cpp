@@ -20,5 +20,5 @@ void setupTime() {
 void getTimestamp(char* buffer, size_t len) {
   time_t now = time(nullptr);
   struct tm* timeinfo = localtime(&now);
-  strftime(buffer, len, "%Y-%m-%d %H:%M:%S (GMT+8)", timeinfo);
+  strftime(buffer, len, "%Y-%m-%d %H:%M:%S", timeinfo);
 }

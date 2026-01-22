@@ -3,6 +3,15 @@
 // Initialized variables
 #include "secrets.h"
 
+// Fallback definition
+#ifndef HIDDEN_SSID
+#define HIDDEN_SSID ""
+#endif
+
+#ifndef HIDDEN_PASS
+#define HIDDEN_PASS ""
+#endif
+
 // Custom Libraries
 #include "WiFiManager.h"           // WiFi connection manager class
 // #include "OTA_config.h"            // OTA setup and event handlers
@@ -13,7 +22,6 @@
 // ─────────────────────────────────────────────
 // 📡 Configuration
 // ─────────────────────────────────────────────
-#define ACUsignature   "MITSUBISHI_HEAVY_64"   // ACU IR signature
 #define kIrLedPin      4                       // IR LED GPIO pin
 #define rawDataLength  133                     // Raw buffer size for IR pulse timing
 
@@ -33,17 +41,12 @@ const IRProtocolConfig* selectedProtocol = &MITSUBISHI_HEAVY_64;
 // ─────────────────────────────────────────────
 void setup() {
   Serial.begin(115200);
-  irsend.begin();             // IR pin setup
-  delay(5000);                // Serial startup delay (skip in production)
+  irsend.begin();
+  delay(5000);                // Serial startup delay (skip if not debugging)
   Serial.println("\n🔌 MCU Status: ON");
 
-  // First, try to connect to a known hidden network. This is a blocking call.
-  // If this fails, the non-blocking manager will take over.
-  wifiManager.connectToHidden(HIDDEN_SSID, HIDDEN_PASS);
+  wifiManager.begin(HIDDEN_SSID, HIDDEN_PASS);
 
-  wifiManager.begin(); // Start the non-blocking WiFi connection process
-
-  // Serial.println("Connecting to WiFi...");
   while (WiFi.status() != WL_CONNECTED) {
     wifiManager.handleConnection(); // Let the state machine run
     delay(10); // Small delay to prevent busy-waiting
