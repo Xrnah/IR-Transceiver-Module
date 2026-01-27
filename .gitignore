@@ -8,7 +8,7 @@
 #   ...will vary depending on build
 include/secrets.h
 # include/secret_template.h
-# platformio.ini
+platformio.ini
 lib/WiFi_Manager/wifi_credentials.h
 lib/WiFi_Manager/wifi_credentials.cpp
 replacements.txt
