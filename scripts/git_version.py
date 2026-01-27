@@ -11,7 +11,7 @@ except:
     git_hash = "nogit"
 
 # PHT = datetime.timezone(datetime.timedelta(hours=8))
-build_ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC")
+build_ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 env.Append(
     CPPDEFINES=[
