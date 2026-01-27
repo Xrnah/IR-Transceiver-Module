@@ -216,7 +216,7 @@ void publishACUState(JsonDocument& sourceDoc) {
 
 void publishIdentity() {
   if (!mqtt_client.connected()) return;
-  StaticJsonDocument<192> doc;
+  StaticJsonDocument<256> doc;
   char clientIdStr[32];
   snprintf(clientIdStr, sizeof(clientIdStr), "ESP8266Client-%06X", ESP.getChipId());
   
@@ -226,7 +226,7 @@ void publishIdentity() {
   doc["room_type"] = DEFINED_ROOM_TYPE;
   doc["department"] = DEFINED_DEPARTMENT;
 
-  char output[192];
+  char output[256];
   if (doc.overflowed()) Serial.println("⚠ Identity JSON doc overflow");
   size_t n = serializeJson(doc, output, sizeof(output));
   if (n >= sizeof(output)) Serial.println("⚠ Identity output truncated");
