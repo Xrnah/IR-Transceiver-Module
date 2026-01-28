@@ -234,6 +234,7 @@ void publishACUState(JsonDocument& sourceDoc) {
     Serial.println("[MQTT] Publish failed.");
     mqtt_publish_failures++;
   }
+  stateDoc.clear();
 }
 
 void publishIdentity() {
@@ -255,6 +256,7 @@ void publishIdentity() {
   if (n >= sizeof(output)) Serial.println("⚠ Identity output truncated");
 
   mqtt_client.publish(mqtt_topic_pub_identity, output, true); // Retain identity info
+  doc.clear();
 }
 
 void publishDeployment() {
@@ -271,6 +273,8 @@ void publishDeployment() {
   size_t n = serializeJson(doc, output, sizeof(output));
   if (n >= sizeof(output)) Serial.println("⚠ Deployment output truncated");
   mqtt_client.publish(mqtt_topic_pub_deployment, output, true); // Retain deployment info
+
+  doc.clear();
 }
 
 void publishDiagnostics() {
@@ -280,7 +284,6 @@ void publishDiagnostics() {
     if (mqttPublishInProgress) return;
     mqttPublishInProgress = true;
 
-    StaticJsonDocument<128> diagDoc;
     diagDoc["status"] = "online";
 
     char timeBuffer[30];
@@ -304,6 +307,7 @@ void publishDiagnostics() {
     if (!ok) mqtt_publish_failures++;
 
     mqttPublishInProgress = false;
+    diagDoc.clear();
 }
 
 void publishMetrics() {
@@ -312,7 +316,6 @@ void publishMetrics() {
     if (mqttPublishInProgress) return;
     mqttPublishInProgress = true;
 
-    StaticJsonDocument<512> metricsDoc;
     unsigned long now = millis();
 
     metricsDoc["uptime_s"] = now / 1000;
@@ -348,6 +351,7 @@ void publishMetrics() {
     if (!ok) mqtt_publish_failures++;
 
     mqttPublishInProgress = false;
+    metricsDoc.clear();
 
     // Optional debug
     // Serial.println("[MQTT] Metrics published:");
