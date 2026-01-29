@@ -34,8 +34,9 @@
 #define rawDataLength  133                     // Raw buffer size for IR pulse timing
 
 // DEBUG OPTIONS
-// #define DEBUG_IR_PRINT // Enables raw binary ACU instruction in serial
 // #define DEBUG_MODE // Enables serial
+// #define DEBUG_IR_PRINT // Enables raw binary ACU instruction in serial
+// #define DEBUG_MODE_TIMER // Enables timed functions in loop
 
 // ─────────────────────────────────────────────
 // 🔧 Global Objects
@@ -45,7 +46,7 @@ IRsend irsend(kIrLedPin);                      // IR transmitter
 uint16_t durations[rawDataLength];             // Pulse duration buffer
 const IRProtocolConfig* selectedProtocol = &MITSUBISHI_HEAVY_64;
 
-#ifdef DEBUG_MODE
+#ifdef DEBUG_MODE_TIMER
   volatile uint32_t lastTimerEvent = 0;
   const uint32_t timerInterval = 1000; // 1 second
 #endif
@@ -86,7 +87,7 @@ void loop() {
     handleMQTT();
   }
 
-  #ifdef DEBUG_MODE
+  #ifdef DEBUG_MODE_TIMER
   uint32_t now = millis();
     if ((uint32_t)(now - lastTimerEvent) >= timerInterval) {
     lastTimerEvent = millis(); // Update the time of the last event
