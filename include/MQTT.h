@@ -81,6 +81,17 @@
   char mqtt_topic_pub_diagnostics[80];
   char mqtt_topic_pub_metrics[80];
 
+  // MQTT Queue for ISR-safe decoupling
+  struct MQTTQueueItem {
+      char topic[64];
+      char payload[256];
+      unsigned int length;
+  };
+  const uint8_t MQTT_QUEUE_SIZE = 5;
+  MQTTQueueItem mqttQueue[MQTT_QUEUE_SIZE];
+  volatile uint8_t mqttQueueHead = 0;
+  volatile uint8_t mqttQueueTail = 0;
+
   // Heartbeat & Timestamp buffers
   char lastReceivedCommandJson[256] = {0};
   char lastCommandTimestamp[30] = {0};
@@ -95,7 +106,7 @@
 
   static ACUState lastState = {0};
 
-  static StaticJsonDocument<128> diagDoc;
+  static StaticJsonDocument<192> diagDoc;
   static StaticJsonDocument<384> metricsDoc;
 
   // Pre-allocated serialization buffers
@@ -293,6 +304,10 @@ void publishDiagnostics() {
     if (lastCommandTimestamp[0] != '\0') {
         diagDoc["last_cmd_ts"] = lastCommandTimestamp;
     }
+    
+    diagDoc["cpu_mhz"] = ESP.getCpuFreqMHz();
+    diagDoc["reset_reason"] = ESP.getResetReason();
+
 
     // Serialize into pre-allocated global buffer
     size_t n = serializeJson(diagDoc, diagOutput, sizeof(diagOutput));
@@ -421,11 +436,16 @@ void handleReceivedCommand(char* topic, byte* payload, unsigned int length) {
 
   yield(); // Allow ESP8266 background tasks
 
-  // Send IR
   size_t len = 0;
-  parseBinaryToDurations(command, durations, len);
-  irsend.sendRaw(durations, len, 38);
-  commands_executed_counter++;
+  // Send IR if parsing is successful
+  if (parseBinaryToDurations(command, durations, len)) {
+    irsend.sendRaw(durations, len, 38);
+    commands_executed_counter++;
+  } else {
+    Serial.println("[MQTT] Failed to parse command for IR sending.");
+    commands_failed_ir++;
+    return; // Stop processing this command
+  }
 
   // Update latency metrics
   unsigned long t_tx = millis();
@@ -464,17 +484,39 @@ void handleReceivedCommand(char* topic, byte* payload, unsigned int length) {
 
 }
 
+void processMQTTQueue() {
+  while (mqttQueueHead != mqttQueueTail) {
+    // Process tail
+    MQTTQueueItem* item = &mqttQueue[mqttQueueTail];
+
+    Serial.print("[MQTT] Processing topic: ");
+    Serial.println(item->topic);
+
+    if (topicMatchesModule(item->topic)) {
+        handleReceivedCommand(item->topic, (byte*)item->payload, item->length);
+    } else {
+        Serial.println("[MQTT] Topic rejected by filter.");
+    }
+
+    // Advance tail
+    mqttQueueTail = (mqttQueueTail + 1) % MQTT_QUEUE_SIZE;
+    yield();
+  }
+}
 
 void callback(char* topic, byte* payload, unsigned int length) {
-  Serial.print("[MQTT] Incoming topic: ");
-  Serial.println(topic);
-
-  if (!topicMatchesModule(topic)) {
-    Serial.println("[MQTT] Topic rejected by filter.");
-    return;
+  uint8_t nextHead = (mqttQueueHead + 1) % MQTT_QUEUE_SIZE;
+  if (nextHead != mqttQueueTail) {
+    strncpy(mqttQueue[mqttQueueHead].topic, topic, sizeof(mqttQueue[0].topic) - 1);
+    mqttQueue[mqttQueueHead].topic[sizeof(mqttQueue[0].topic) - 1] = '\0';
+    
+    unsigned int copyLen = (length < sizeof(mqttQueue[0].payload)) ? length : sizeof(mqttQueue[0].payload);
+    memcpy(mqttQueue[mqttQueueHead].payload, payload, copyLen);
+    if (copyLen < sizeof(mqttQueue[0].payload)) mqttQueue[mqttQueueHead].payload[copyLen] = '\0';
+    mqttQueue[mqttQueueHead].length = copyLen;
+    
+    mqttQueueHead = nextHead;
   }
-
-  handleReceivedCommand(topic, payload, length);
 }
 
 
@@ -539,6 +581,7 @@ void handleMQTT() {
   } 
 
   mqtt_client.loop();
+  processMQTTQueue();
   yield();
 
   publishHeartbeat();
