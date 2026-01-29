@@ -33,8 +33,9 @@
 #define kIrLedPin      4                       // IR LED GPIO pin
 #define rawDataLength  133                     // Raw buffer size for IR pulse timing
 
-// Optional: Enable this to send test IR via Serial input
-// #define DEBUG_IR_PRINT
+// DEBUG OPTIONS
+// #define DEBUG_IR_PRINT // Enables raw binary ACU instruction in serial
+// #define DEBUG_MODE // Enables serial
 
 // ─────────────────────────────────────────────
 // 🔧 Global Objects
@@ -44,14 +45,23 @@ IRsend irsend(kIrLedPin);                      // IR transmitter
 uint16_t durations[rawDataLength];             // Pulse duration buffer
 const IRProtocolConfig* selectedProtocol = &MITSUBISHI_HEAVY_64;
 
+#ifdef DEBUG_MODE
+  volatile uint32_t lastTimerEvent = 0;
+  const uint32_t timerInterval = 1000; // 1 second
+#endif
 // ─────────────────────────────────────────────
 // 🛠️ Setup (runs once on boot)
 // ─────────────────────────────────────────────
 void setup() {
-  Serial.begin(115200);
+  #ifdef DEBUG_MODE
+    Serial.begin(115200);
+    delay(5000); // Startup delay for serial debugging. This is skipped in release builds.
+    Serial.println("\n🔌 MCU Status: ON");
+    Serial.print("Reset reason: ");
+    Serial.println(ESP.getResetReason());
+  #endif
+  
   irsend.begin();
-  delay(5000);                // Serial startup delay (skip if not debugging)
-  Serial.println("\n🔌 MCU Status: ON");
 
   wifiManager.begin(HIDDEN_SSID, HIDDEN_PASS);
 
@@ -75,6 +85,20 @@ void loop() {
   if (WiFi.status() == WL_CONNECTED) {
     handleMQTT();
   }
+
+  #ifdef DEBUG_MODE
+  uint32_t now = millis();
+    if ((uint32_t)(now - lastTimerEvent) >= timerInterval) {
+    lastTimerEvent = millis(); // Update the time of the last event
+
+    Serial.println("[TIMER] Periodic task executed.");
+    
+    // Task: Free heap monitor
+    Serial.print("Free Heap: ");
+    Serial.println(ESP.getFreeHeap());
+    
+    }    
+  #endif
 
   #ifdef DEBUG_IR_PRINT
   debugIRInput();           // Optional IR test via Serial input
