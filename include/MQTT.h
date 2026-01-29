@@ -108,10 +108,12 @@
 
   static StaticJsonDocument<192> diagDoc;
   static StaticJsonDocument<384> metricsDoc;
+  static StaticJsonDocument<192> statePubDoc;
 
   // Pre-allocated serialization buffers
-  static char diagOutput[128];
+  static char diagOutput[192];
   static char metricsOutput[384];
+  static char statePubOutput[192];
 
 // ─────────────────────────────────────────────
 // 📊 Metrics & Counters
@@ -215,37 +217,35 @@ bool topicMatchesModule(char* topic) {
 // =================================================================================
 // 4. PUBLISHING FUNCTIONS
 // =================================================================================
-void publishACUState(JsonDocument& sourceDoc) {
+void publishACUState(const JsonObject& stateObj) {
   if (!mqtt_client.connected()) {
     Serial.println("[MQTT] Not connected, skipping publish.");
     return;
   }
 
-  JsonDocument stateDoc;
-  
+  statePubDoc.clear();
+
   // Map internal keys to schema
-  if (sourceDoc.containsKey("temperature")) stateDoc["temperature"] = sourceDoc["temperature"];
-  if (sourceDoc.containsKey("fan_speed"))    stateDoc["fan_speed"]    = sourceDoc["fan_speed"];
-  if (sourceDoc.containsKey("mode"))        stateDoc["mode"]        = sourceDoc["mode"];
-  if (sourceDoc.containsKey("louver"))      stateDoc["louver"]      = sourceDoc["louver"];
-  if (sourceDoc.containsKey("power"))        stateDoc["power"]        = sourceDoc["power"];
+  if (stateObj.containsKey("temperature")) statePubDoc["temperature"] = stateObj["temperature"];
+  if (stateObj.containsKey("fan_speed"))    statePubDoc["fan_speed"]    = stateObj["fan_speed"];
+  if (stateObj.containsKey("mode"))        statePubDoc["mode"]        = stateObj["mode"];
+  if (stateObj.containsKey("louver"))      statePubDoc["louver"]      = stateObj["louver"];
+  if (stateObj.containsKey("power"))        statePubDoc["power"]        = stateObj["power"];
 
   if (lastChangeTimestamp[0] != '\0') {
-    stateDoc["last_change_ts"] = lastChangeTimestamp;
+    statePubDoc["last_change_ts"] = lastChangeTimestamp;
   }
 
-  char output[192];
-  size_t len = serializeJson(stateDoc, output, sizeof(output));
+  size_t len = serializeJson(statePubDoc, statePubOutput, sizeof(statePubOutput));
 
-  bool ok = mqtt_client.publish(mqtt_topic_pub_state, (const uint8_t*)output, len, true); // retain = true
+  bool ok = mqtt_client.publish(mqtt_topic_pub_state, (const uint8_t*)statePubOutput, len, true); // retain = true
   if (ok) {
     Serial.println("[MQTT] Published state:");
-    Serial.println(output);
+    Serial.println(statePubOutput);
   } else {
     Serial.println("[MQTT] Publish failed.");
     mqtt_publish_failures++;
   }
-  stateDoc.clear();
 }
 
 void publishIdentity() {
@@ -384,7 +384,7 @@ void publishOnReconnect() {
   if (lastReceivedCommandJson[0] != '\0') {
     StaticJsonDocument<384> doc;
     deserializeJson(doc, lastReceivedCommandJson);
-    publishACUState(doc);
+    publishACUState(doc.as<JsonObject>());
   }
 }
 
@@ -461,11 +461,9 @@ void handleReceivedCommand(char* topic, byte* payload, unsigned int length) {
     strncpy(lastChangeTimestamp, timeBuffer, sizeof(lastChangeTimestamp));
 
     // Publish updated ACU state
-    StaticJsonDocument<128> stateDoc;
-    remote.toJSON(stateDoc.to<JsonObject>());
-    char output[128];
-    serializeJson(stateDoc, output, sizeof(output));
-    mqtt_client.publish(mqtt_topic_pub_state, output, true);
+    StaticJsonDocument<128> tempStateDoc;
+    remote.toJSON(tempStateDoc.to<JsonObject>());
+    publishACUState(tempStateDoc.as<JsonObject>());
 
     // Update the stored previous state
     lastState = currentState;
