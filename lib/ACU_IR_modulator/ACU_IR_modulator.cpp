@@ -1,7 +1,7 @@
 #include "ACU_IR_modulator.h"
 
 // Convert a 64-bit binary command into IR durations for sending via IR LED
-void parseBinaryToDurations(uint64_t binaryInput, uint16_t *durations, size_t &len)
+bool parseBinaryToDurations(uint64_t binaryInput, uint16_t *durations, size_t &len)
 {
     len = 0;  // Reset length for durations array
 
@@ -15,8 +15,8 @@ void parseBinaryToDurations(uint64_t binaryInput, uint16_t *durations, size_t &l
         // Prevent buffer overflow before adding new durations
         if (len + 2 > rawDataLength)
         {
-            Serial.println("Error: Durations array overflow!");
-            return;
+            // Error: Durations array overflow!
+            return false;
         }
 
         // Extract the current bit value (0 or 1)
@@ -34,12 +34,14 @@ void parseBinaryToDurations(uint64_t binaryInput, uint16_t *durations, size_t &l
     } 
     else 
     {
-        Serial.println("Error: Unable to add ending sequence due to array size.");
+        // Error: Unable to add ending sequence due to array size.
+        return false; // Not a critical failure, but indicates truncation.
     }
+    return true;
 }
 
 // Legacy method to convert a binary string (e.g. "110010...") into IR durations
-void parseBinaryToDurations(const String &binaryInput, uint16_t *durations, size_t &len) {
+bool parseBinaryToDurations(const String &binaryInput, uint16_t *durations, size_t &len) {
     len = 0;  // Reset durations length
 
     // Add header mark and space durations
@@ -50,8 +52,8 @@ void parseBinaryToDurations(const String &binaryInput, uint16_t *durations, size
     for (size_t i = 0; i < binaryInput.length(); i++) {
         // Check buffer size before adding durations
         if (len + 2 > rawDataLength) {
-            Serial.println("Error: Durations array overflow!");
-            return;
+            // Error: Durations array overflow!
+            return false;
         }
 
         char bit = binaryInput[i];
@@ -71,8 +73,10 @@ void parseBinaryToDurations(const String &binaryInput, uint16_t *durations, size
         durations[len++] = kHdrSpace;
         durations[len++] = kBitMark;
     } else {
-        Serial.println("Error: Unable to add ending sequence due to array size.");
+        // Error: Unable to add ending sequence due to array size.
+        return false; // Not a critical failure, but indicates truncation.
     }
+    return true;
 }
 
 // Debug helper function: reads 64-bit binary input from Serial, converts, and sends IR
@@ -93,11 +97,13 @@ void debugIRInput() {
         size_t len = 0;
 
         // Convert binary string to durations array
-        parseBinaryToDurations(binaryInput, durations, len);
+        if (parseBinaryToDurations(binaryInput, durations, len)) {
+            // Send IR signal at 38 kHz carrier frequency
+            irsend.sendRaw(durations, len, 38);
 
-        // Send IR signal at 38 kHz carrier frequency
-        irsend.sendRaw(durations, len, 38);
-
-        Serial.println("IR sent!");
+            Serial.println("IR sent!");
+        } else {
+            Serial.println("Error: Failed to parse binary string into IR durations.");
+        }
     }
 }

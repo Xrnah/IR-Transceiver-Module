@@ -71,10 +71,10 @@ extern IRsend irsend;                     // Extern declaration
 extern uint16_t durations[rawDataLength]; // Durations buffer
 
 // Main parser for internal 64-bit command
-void parseBinaryToDurations(uint64_t binaryInput, uint16_t *durations, size_t &len);
+bool parseBinaryToDurations(uint64_t binaryInput, uint16_t *durations, size_t &len);
 
 // Optional legacy parser for Serial debug input
-void parseBinaryToDurations(const String &binaryInput, uint16_t *durations, size_t &len);
+bool parseBinaryToDurations(const String &binaryInput, uint16_t *durations, size_t &len);
 
 // Serial debugging for binary input
 void debugIRInput();

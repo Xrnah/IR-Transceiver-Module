@@ -46,13 +46,14 @@ enum class ACUMode {
 // ====== Data Structures ======
 
 // Struct representing the complete AC unit state.
-struct ACUState {
-  uint8_t fan_speed = 0;          // Fan speed (1–4 typically)
-  uint8_t temperature = 0;       // Temperature in °C (usually 18–30)
-  ACUMode mode = ACUMode::AUTO;  // Operating mode
-  uint8_t louver = 0;            // Louver position (e.g., 1–4)
-  bool power = true;              // Power state
-};
+typedef struct __attribute__((packed)) {
+  uint8_t fan_speed;
+  uint8_t temperature;
+  ACUMode mode;
+  uint8_t louver;
+  bool power;
+} ACUState;
+
 
 // ====== Main Class: ACU_remote ======
 
