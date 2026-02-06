@@ -22,11 +22,15 @@
 #include <ArduinoJson.h>
 #include <PubSubClient.h>
 #include <ESP8266WiFi.h>
+#include "secrets.h" // Credentials
 #include "ACU_remote_encoder.h"
-#include "ACU_ir_adapters.h"
+#if USE_ACU_ADAPTER
+  #include "ACU_ir_adapters.h"
+#else
+  #include "ACU_IR_modulator.h"
+#endif
 #include <NTP.h>  // For getTimestamp()
 #include <pgmspace.h>
-#include "secrets.h" // Credentials
 
 // =================================================================================
 // 1. CONFIGURATION & CONSTANTS
@@ -70,8 +74,10 @@
   WiFiClient espClient;
   PubSubClient mqtt_client(espClient);
   ACU_remote remote("MITSUBISHI_HEAVY_64");
+#if USE_ACU_ADAPTER
   // IR adapter selection (switch to Mhi152Adapter if needed)
   Mhi88Adapter acuAdapter;
+#endif
 // ─────────────────────────────────────────────
 // 📝 Buffers
 // ─────────────────────────────────────────────
@@ -429,11 +435,16 @@ void handleReceivedCommand(char* topic, byte* payload, unsigned int length) {
     return;
   }
 
+#if USE_ACU_ADAPTER
   Serial.print("[MQTT] JSON parsed. Adapter: ");
   Serial.println(acuAdapter.name());
+#else
+  Serial.println("[MQTT] JSON parsed. Using legacy IR modulator.");
+#endif
 
   yield(); // Allow ESP8266 background tasks
 
+#if USE_ACU_ADAPTER
   // Send IR using adapter
   if (acuAdapter.send(remote.getState())) {
     commands_executed_counter++;
@@ -442,6 +453,19 @@ void handleReceivedCommand(char* topic, byte* payload, unsigned int length) {
     commands_failed_ir++;
     return; // Stop processing this command
   }
+#else
+  // Legacy IR modulator path
+  uint64_t command = remote.encodeCommand();
+  size_t len = 0;
+  if (parseBinaryToDurations(command, durations, len)) {
+    irsend.sendRaw(durations, len, 38);
+    commands_executed_counter++;
+  } else {
+    Serial.println("[MQTT] Failed to parse command for IR sending.");
+    commands_failed_ir++;
+    return; // Stop processing this command
+  }
+#endif
 
   // Update latency metrics
   unsigned long t_tx = millis();
@@ -564,7 +588,9 @@ void setupMQTT() {
   mqtt_client.setCallback(callback);
   mqtt_client.setKeepAlive(45); // 45 seconds
   mqtt_client.setBufferSize(512); // For identity and metrics
+#if USE_ACU_ADAPTER
   acuAdapter.begin();
+#endif
 }
 
 void handleMQTT() {

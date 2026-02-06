@@ -20,18 +20,29 @@
 #define BUILD_TIMESTAMP "unknown"
 #endif
 
+// IR send default pipeline selection
+// 1 = use protocol adapters (IRremoteESP8266)
+// 0 = use legacy raw IR modulator (64-bit custom)
+#ifndef USE_ACU_ADAPTER
+  #define USE_ACU_ADAPTER 0
+#endif
+
 // Custom Libraries
 #include "WiFiManager.h"           // WiFi connection manager class
 // #include "OTA_config.h"            // OTA setup and event handlers
 #include "ACU_remote_encoder.h"    // IR command generator (ACU signature)
-#include "ACU_IR_modulator.h"      // Converts command to IR waveform
+#if !USE_ACU_ADAPTER
+  #include "ACU_IR_modulator.h"      // Converts command to IR waveform
+#endif
 #include "MQTT.h"                  // MQTT messaging (PubSubClient wrapper)
 
 // ─────────────────────────────────────────────
 // 📡 Configuration
 // ─────────────────────────────────────────────
-#define kIrLedPin      4                       // IR LED GPIO pin
-#define rawDataLength  133                     // Raw buffer size for IR pulse timing
+#if !USE_ACU_ADAPTER
+  #define kIrLedPin      4                       // IR LED GPIO pin
+  #define rawDataLength  133                     // Raw buffer size for IR pulse timing
+#endif
 
 // DEBUG OPTIONS
 // #define DEBUG_MODE // Enables serial
@@ -42,9 +53,11 @@
 // 🔧 Global Objects
 // ─────────────────────────────────────────────
 CustomWiFi::WiFiManager wifiManager;           // WiFi manager instance
-IRsend irsend(kIrLedPin);                      // IR transmitter
-uint16_t durations[rawDataLength];             // Pulse duration buffer
-const IRProtocolConfig* selectedProtocol = &MITSUBISHI_HEAVY_64;
+#if !USE_ACU_ADAPTER
+  IRsend irsend(kIrLedPin);                      // IR transmitter
+  uint16_t durations[rawDataLength];             // Pulse duration buffer
+  const IRProtocolConfig* selectedProtocol = &MITSUBISHI_HEAVY_64;
+#endif
 
 #ifdef DEBUG_MODE_TIMER
   volatile uint32_t lastTimerEvent = 0;
@@ -62,7 +75,9 @@ void setup() {
     Serial.println(ESP.getResetReason());
   #endif
   
+#if !USE_ACU_ADAPTER
   irsend.begin();
+#endif
 
   wifiManager.begin(HIDDEN_SSID, HIDDEN_PASS);
 
@@ -101,7 +116,9 @@ void loop() {
     }    
   #endif
 
-  #ifdef DEBUG_IR_PRINT
-  debugIRInput();           // Optional IR test via Serial input
+  #if !USE_ACU_ADAPTER
+    #ifdef DEBUG_IR_PRINT
+    debugIRInput();           // Optional IR test via Serial input
+    #endif
   #endif
 }

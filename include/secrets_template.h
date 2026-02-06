@@ -13,25 +13,62 @@
 
 
 // ----------------------------------------------------------------
-// 1. Hardcoded WiFi Credentials (for hidden networks in main.cpp)
+// 1. IR SEND PIPELINE (build-time selection)
+// ----------------------------------------------------------------
+// 1 = use IRremoteESP8266 adapters (Mhi88/Mhi152)
+// 0 = use legacy raw IR modulator (custom 64-bit)
+#define USE_ACU_ADAPTER 1
+
+// Define the model string shown in identity messages
+// Example values: "MITSUBISHI_HEAVY_88", "MITSUBISHI_HEAVY_152", "MITSUBISHI_HEAVY_64"
+#if USE_ACU_ADAPTER
+  #define ACU_REMOTE_MODEL "MHI_88"
+#else
+  #define ACU_REMOTE_MODEL "MHI_64"
+#endif
+
+
+// ----------------------------------------------------------------
+// 2. Hidden WiFi Credentials (for hidden networks in main.cpp)
 // ----------------------------------------------------------------
 #define HIDDEN_SSID "sample_ssid"
 #define HIDDEN_PASS "sample_pass"
 
 
 // ----------------------------------------------------------------
-// 2. MQTT Broker Configuration (MQTT.h)
+// 3. MQTT Broker Configuration (MQTT.h)
 // ----------------------------------------------------------------
 #define MQTT_SERVER "192.168.1.1"
 #define MQTT_PORT 1234
 #define MQTT_USER "user"
 #define MQTT_PASS "pass"
 
-  const char* floor_id = "Floor_Topic";
-  const char* room_id  = "Room_Topic";
-  const char* unit_id  = "ACU_Topic";
+#define STATE_PATH   "modules"
+#define CONTROL_PATH "commands"
+
 
 // ----------------------------------------------------------------
-// 3. Known WiFi Networks Table (WiFiManager.cpp)
+// 4. Per-Module Configuration (mass production)
 // ----------------------------------------------------------------
+// Use short values for production, e.g., "08F", "808", "ACU1"
+#define DEFINED_FLOOR "Floor_Topic"
+#define DEFINED_ROOM  "Room_Topic"
+#define DEFINED_UNIT  "ACU_Topic"
+
+// Room type ID: IR=1, IL=2, CA=3, OR=4, SR=5
+#define DEFINED_ROOM_TYPE_ID 1
+#define DEFINED_DEPARTMENT "School of Engineering"
+
+// ----------------------------------------------------------------
+// 5. NTP Servers
+// ----------------------------------------------------------------
+#define NTP_SERVER_1 "pool.ntp.org"
+#define NTP_SERVER_2 "time.nist.gov"
+
+
+// ----------------------------------------------------------------
+// 6. Hardware Versioning (optional)
+// ----------------------------------------------------------------
+#define DEFINED_VERSION_HASH "dev"
+#define DEFINED_DEPLOYMENT_DATE "January 1, 2026"
 
