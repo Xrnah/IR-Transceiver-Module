@@ -23,7 +23,7 @@
 #include <PubSubClient.h>
 #include <ESP8266WiFi.h>
 #include "ACU_remote_encoder.h"
-#include "ACU_IR_modulator.h"
+#include "ACU_ir_adapters.h"
 #include <NTP.h>  // For getTimestamp()
 #include <pgmspace.h>
 #include "secrets.h" // Credentials
@@ -70,6 +70,8 @@
   WiFiClient espClient;
   PubSubClient mqtt_client(espClient);
   ACU_remote remote("MITSUBISHI_HEAVY_64");
+  // IR adapter selection (switch to Mhi152Adapter if needed)
+  Mhi88Adapter acuAdapter;
 // ─────────────────────────────────────────────
 // 📝 Buffers
 // ─────────────────────────────────────────────
@@ -427,22 +429,16 @@ void handleReceivedCommand(char* topic, byte* payload, unsigned int length) {
     return;
   }
 
-  // Encode IR command
-  uint64_t command = remote.encodeCommand();
-  char binaryStr[100];
-  ACU_remote::toBinaryString(command, binaryStr, sizeof(binaryStr), true);
-  Serial.println("[MQTT] JSON parsed and encoded:");
-  Serial.println(binaryStr);
+  Serial.print("[MQTT] JSON parsed. Adapter: ");
+  Serial.println(acuAdapter.name());
 
   yield(); // Allow ESP8266 background tasks
 
-  size_t len = 0;
-  // Send IR if parsing is successful
-  if (parseBinaryToDurations(command, durations, len)) {
-    irsend.sendRaw(durations, len, 38);
+  // Send IR using adapter
+  if (acuAdapter.send(remote.getState())) {
     commands_executed_counter++;
   } else {
-    Serial.println("[MQTT] Failed to parse command for IR sending.");
+    Serial.println("[MQTT] Failed to send IR command.");
     commands_failed_ir++;
     return; // Stop processing this command
   }
@@ -568,6 +564,7 @@ void setupMQTT() {
   mqtt_client.setCallback(callback);
   mqtt_client.setKeepAlive(45); // 45 seconds
   mqtt_client.setBufferSize(512); // For identity and metrics
+  acuAdapter.begin();
 }
 
 void handleMQTT() {
