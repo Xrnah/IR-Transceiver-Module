@@ -33,6 +33,58 @@
 #include <pgmspace.h>
 
 // =================================================================================
+// 0. SAFE DEFAULTS (avoid build errors if macros are missing)
+// =================================================================================
+#ifndef MQTT_SERVER
+  #define MQTT_SERVER "127.0.0.1"
+#endif
+#ifndef MQTT_PORT
+  #define MQTT_PORT 1883
+#endif
+#ifndef MQTT_USER
+  #define MQTT_USER ""
+#endif
+#ifndef MQTT_PASS
+  #define MQTT_PASS ""
+#endif
+#ifndef STATE_PATH
+  #define STATE_PATH "state"
+#endif
+#ifndef CONTROL_PATH
+  #define CONTROL_PATH "control"
+#endif
+#ifndef DEFINED_FLOOR
+  #define DEFINED_FLOOR "unknown_floor"
+#endif
+#ifndef DEFINED_ROOM
+  #define DEFINED_ROOM "unknown_room"
+#endif
+#ifndef DEFINED_UNIT
+  #define DEFINED_UNIT "unknown_unit"
+#endif
+#ifndef DEFINED_ROOM_TYPE_ID
+  #define DEFINED_ROOM_TYPE_ID 0
+#endif
+#ifndef DEFINED_DEPARTMENT
+  #define DEFINED_DEPARTMENT "unknown_department"
+#endif
+#ifndef ACU_REMOTE_MODEL
+  #define ACU_REMOTE_MODEL "unknown_model"
+#endif
+#ifndef GIT_HASH
+  #define GIT_HASH "unknown"
+#endif
+#ifndef BUILD_TIMESTAMP
+  #define BUILD_TIMESTAMP "unknown"
+#endif
+#ifndef BUILD_HOST
+  #define BUILD_HOST "unknown"
+#endif
+#ifndef BUILD_USER
+  #define BUILD_USER "unknown"
+#endif
+
+// =================================================================================
 // 1. CONFIGURATION & CONSTANTS
 // =================================================================================
 
@@ -63,6 +115,7 @@
   #define qos 1 // Quality of Service
   #define cleanSession false
   const long HEARTBEAT_INTERVAL_MS = 15000; // 15 seconds
+  const long METRICS_INTERVAL_MS = 120000;  // 120 seconds
 
 // =================================================================================
 // 2. GLOBAL OBJECTS & STATE
@@ -105,6 +158,7 @@
   char lastCommandTimestamp[30] = {0};
   char lastChangeTimestamp[30] = {0};
   unsigned long lastHeartbeatTime = 0;
+  unsigned long lastMetricsTime = 0;
 
   bool mqttPublishInProgress = false; // lock to prevent overlapping publishes
 
@@ -114,11 +168,13 @@
 
   static ACUState lastState = {0};
 
-  static StaticJsonDocument<192> diagDoc;
+  static StaticJsonDocument<256> deploymentDoc;
+  static StaticJsonDocument<160> diagDoc;
   static StaticJsonDocument<384> metricsDoc;
   static StaticJsonDocument<192> statePubDoc;
 
   // Pre-allocated serialization buffers
+  static char deploymentOutput[224];
   static char diagOutput[192];
   static char metricsOutput[384];
   static char statePubOutput[192];
@@ -148,10 +204,23 @@
 
   // Command failure counters
   uint32_t commands_failed_parse = 0;
+  uint32_t commands_failed_struct = 0;
   uint32_t commands_failed_ir = 0;
 
   // MQTT publish failures
   uint32_t mqtt_publish_failures = 0;
+
+  // Uptime wrap tracking (millis() wraps ~49.7 days)
+  uint32_t uptime_wraps = 0;
+  unsigned long last_uptime_ms = 0;
+
+  // Cached metric snapshots (computed in updateConnectionStats)
+  uint64_t uptime_s_cached = 0;
+  uint32_t wifi_uptime_s_cached = 0;
+  uint32_t mqtt_uptime_s_cached = 0;
+  int32_t wifi_rssi_cached = -127;
+  uint32_t free_heap_cached = 0;
+  uint32_t heap_frag_cached = 0;
 
 // =================================================================================
 // 3. INTERNAL UTILITIES
@@ -174,6 +243,16 @@ void setupMQTTTopics() {
 // ─────────────────────────────────────────────
 void updateConnectionStats() {
   unsigned long now = millis();
+
+  // Track millis() wrap to extend uptime range
+  if (last_uptime_ms != 0 && now < last_uptime_ms) {
+    uptime_wraps++;
+  }
+  last_uptime_ms = now;
+
+  // Snapshot uptime (seconds) from extended millisecond counter
+  uint64_t total_ms = ((uint64_t)uptime_wraps << 32) + (uint64_t)now;
+  uptime_s_cached = total_ms / 1000ULL;
 
   // WiFi Stats
   bool current_wifi = (WiFi.status() == WL_CONNECTED);
@@ -216,6 +295,13 @@ void updateConnectionStats() {
     mqtt_disconnect_counter++;
   }
   prev_mqtt_status = current_mqtt;
+
+  // Snapshot derived metrics
+  wifi_uptime_s_cached = current_wifi ? (now - wifi_connect_ts) / 1000 : 0;
+  mqtt_uptime_s_cached = current_mqtt ? (now - mqtt_connect_ts) / 1000 : 0;
+  wifi_rssi_cached = current_wifi ? WiFi.RSSI() : -127;
+  free_heap_cached = ESP.getFreeHeap();
+  heap_frag_cached = ESP.getHeapFragmentation();
 }
 
 bool topicMatchesModule(char* topic) {
@@ -280,20 +366,24 @@ void publishIdentity() {
 
 void publishDeployment() {
   if (!mqtt_client.connected()) return;
-  StaticJsonDocument<256> doc;
-  doc["ip_address"] = WiFi.localIP().toString();
-  // doc["deployment_date"] = DEFINED_DEPLOYMENT_DATE;
-  // doc["version_hash"] = DEFINED_VERSION_HASH;
-  doc["version_hash"] = GIT_HASH;
-  doc["build_timestamp"] = BUILD_TIMESTAMP;
+  deploymentDoc.clear();
+  deploymentDoc["ip_address"] = WiFi.localIP().toString();
+  deploymentDoc["version_hash"] = GIT_HASH;
+  deploymentDoc["build_timestamp"] = BUILD_TIMESTAMP;
 
-  char output[192];
-  if (doc.overflowed()) Serial.println("⚠ Deployment JSON doc overflow");
-  size_t n = serializeJson(doc, output, sizeof(output));
-  if (n >= sizeof(output)) Serial.println("⚠ Deployment output truncated");
-  mqtt_client.publish(mqtt_topic_pub_deployment, output, true); // Retain deployment info
+  deploymentDoc["build_host"] = BUILD_HOST;
+  deploymentDoc["build_user"] = BUILD_USER;
+  // deploymentDoc["deployment_date"] = DEFINED_DEPLOYMENT_DATE;
+  // deploymentDoc["version_hash"] = DEFINED_VERSION_HASH;
 
-  doc.clear();
+  deploymentDoc["reset_reason"] = ESP.getResetReason();
+
+  if (deploymentDoc.overflowed()) Serial.println("⚠ Deployment JSON doc overflow");
+  size_t n = serializeJson(deploymentDoc, deploymentOutput, sizeof(deploymentOutput));
+  if (n >= sizeof(deploymentOutput)) Serial.println("⚠ Deployment output truncated");
+  mqtt_client.publish(mqtt_topic_pub_deployment, deploymentOutput, true); // Retain deployment info
+
+  deploymentDoc.clear();
 }
 
 void publishDiagnostics() {
@@ -307,14 +397,14 @@ void publishDiagnostics() {
 
     char timeBuffer[30];
     getTimestamp(timeBuffer, sizeof(timeBuffer));
-    diagDoc["last_diag_ts"] = timeBuffer;
+    diagDoc["last_seen_ts"] = timeBuffer;
 
     if (lastCommandTimestamp[0] != '\0') {
         diagDoc["last_cmd_ts"] = lastCommandTimestamp;
     }
-    
-    diagDoc["cpu_mhz"] = ESP.getCpuFreqMHz();
-    diagDoc["reset_reason"] = ESP.getResetReason();
+
+    diagDoc["wifi_rssi"] = (WiFi.status() == WL_CONNECTED) ? WiFi.RSSI() : -127;
+    diagDoc["free_heap"] = ESP.getFreeHeap();
 
 
     // Serialize into pre-allocated global buffer
@@ -339,11 +429,9 @@ void publishMetrics() {
     if (mqttPublishInProgress) return;
     mqttPublishInProgress = true;
 
-    unsigned long now = millis();
-
-    metricsDoc["uptime_s"] = now / 1000;
-    metricsDoc["wifi_uptime_s"] = (WiFi.status() == WL_CONNECTED) ? (now - wifi_connect_ts) / 1000 : 0;
-    metricsDoc["mqtt_uptime_s"] = mqtt_client.connected() ? (now - mqtt_connect_ts) / 1000 : 0;
+    metricsDoc["uptime_s"] = uptime_s_cached;
+    metricsDoc["wifi_uptime_s"] = wifi_uptime_s_cached;
+    metricsDoc["mqtt_uptime_s"] = mqtt_uptime_s_cached;
 
     metricsDoc["wifi_conn_total_s"] = wifi_connected_total_s;
     metricsDoc["mqtt_conn_total_s"] = mqtt_connected_total_s;
@@ -353,12 +441,13 @@ void publishMetrics() {
     metricsDoc["cmd_rx"] = commands_received_counter;
     metricsDoc["cmd_exec"] = commands_executed_counter;
     metricsDoc["cmd_fail_parse"] = commands_failed_parse;
+    metricsDoc["cmd_fail_struct"] = commands_failed_struct;
+    metricsDoc["cmd_fail_ir"] = commands_failed_ir;
     metricsDoc["cmd_latency_ms"] = last_cmd_latency_ms;
     metricsDoc["cmd_latency_avg_ms"] = avg_cmd_latency_ms;
 
-    metricsDoc["free_heap"] = ESP.getFreeHeap();
-    metricsDoc["heap_frag"] = ESP.getHeapFragmentation();
-    metricsDoc["wifi_rssi"] = (WiFi.status() == WL_CONNECTED) ? WiFi.RSSI() : -127;
+    metricsDoc["free_heap"] = free_heap_cached;
+    metricsDoc["heap_frag"] = heap_frag_cached;
     metricsDoc["mqtt_pub_fail"] = mqtt_publish_failures;
 
     // Serialize into pre-allocated global buffer
@@ -377,8 +466,8 @@ void publishMetrics() {
     metricsDoc.clear();
 
     // Optional debug
-    // Serial.println("[MQTT] Metrics published:");
-    // Serial.println(metricsOutput);
+    Serial.println("[MQTT] Metrics published:");
+    Serial.println(metricsOutput);
 }
 
 
@@ -401,10 +490,13 @@ void publishHeartbeat() {
     if (!mqtt_client.connected()) return;
 
     if ((long)(millis() - lastHeartbeatTime) >= HEARTBEAT_INTERVAL_MS) {
-        // Only one function sets the lock, so heartbeat + command never overlap
         publishDiagnostics();
-        publishMetrics();
         lastHeartbeatTime = millis();
+    }
+
+    if ((long)(millis() - lastMetricsTime) >= METRICS_INTERVAL_MS) {
+        publishMetrics();
+        lastMetricsTime = millis();
     }
 }
 
@@ -432,6 +524,7 @@ void handleReceivedCommand(char* topic, byte* payload, unsigned int length) {
 
   if (!remote.fromJSON(stateObj)) {
     Serial.println("[MQTT] Invalid command structure.");
+    commands_failed_struct++;
     return;
   }
 
@@ -594,8 +687,6 @@ void setupMQTT() {
 }
 
 void handleMQTT() {
-  updateConnectionStats();
-
   if (!mqtt_client.connected()) {
     mqtt_reconnect();
     yield();
