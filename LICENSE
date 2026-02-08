@@ -19,3 +19,16 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,  
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE  
 SOFTWARE.
+
+---
+
+Third-Party Notices
+
+This project uses the following third-party components. Each component is
+licensed separately by its respective authors.
+
+For full license texts and additional notices, see:
+- THIRD_PARTY_NOTICES.md
+- LICENSES/ArduinoJson-MIT.txt
+- LICENSES/PubSubClient-MIT.txt
+- LICENSES/LGPL-2.1.txt
