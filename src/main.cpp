@@ -12,14 +12,6 @@
 #define HIDDEN_PASS ""
 #endif
 
-#ifndef GIT_HASH
-#define GIT_HASH "unknown"
-#endif
-
-#ifndef BUILD_TIMESTAMP
-#define BUILD_TIMESTAMP "unknown"
-#endif
-
 // IR send default pipeline selection
 // 1 = use protocol adapters (IRremoteESP8266)
 // 0 = use legacy raw IR modulator (64-bit custom)
@@ -97,7 +89,9 @@ void setup() {
 // ─────────────────────────────────────────────
 void loop() {
   wifiManager.handleConnection(); 
-  
+
+  updateConnectionStats();
+
   if (WiFi.status() == WL_CONNECTED) {
     handleMQTT();
   }
