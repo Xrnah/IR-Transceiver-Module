@@ -15,12 +15,12 @@
 // ----------------------------------------------------------------
 // 1. IR SEND PIPELINE (build-time selection)
 // ----------------------------------------------------------------
-// 1 = use IRremoteESP8266 adapters (Mhi88/Mhi152)
+// 1 = use IRremoteESP8266 adapters (MHI88/MHI152)
 // 0 = use legacy raw IR modulator (custom 64-bit)
 #define USE_ACU_ADAPTER 1
 
-// Define the model string shown in identity messages
-// Example values: "MITSUBISHI_HEAVY_88", "MITSUBISHI_HEAVY_152", "MITSUBISHI_HEAVY_64"
+// Model string reported in identity messages
+// Example values: "MHI_64", "MHI_88", "MHI_152"
 #if USE_ACU_ADAPTER
   #define ACU_REMOTE_MODEL "MHI_88"
 #else
