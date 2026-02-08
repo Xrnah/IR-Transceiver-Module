@@ -371,8 +371,8 @@ void publishDeployment() {
   deploymentDoc["version_hash"] = GIT_HASH;
   deploymentDoc["build_timestamp"] = BUILD_TIMESTAMP;
 
-  deploymentDoc["build_host"] = BUILD_HOST;
-  deploymentDoc["build_user"] = BUILD_USER;
+  // deploymentDoc["build_host"] = BUILD_HOST;
+  // deploymentDoc["build_user"] = BUILD_USER;
   // deploymentDoc["deployment_date"] = DEFINED_DEPLOYMENT_DATE;
   // deploymentDoc["version_hash"] = DEFINED_VERSION_HASH;
 
