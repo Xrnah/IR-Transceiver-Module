@@ -16,7 +16,7 @@
 // 1. IR SEND PIPELINE (build-time selection)
 // ----------------------------------------------------------------
 // 1 = use IRremoteESP8266 adapters (MHI88/MHI152)
-// 0 = use legacy raw IR modulator (custom 64-bit)
+// 0 = use raw IR modulator (based on PJA502A704AA remote)
 #define USE_ACU_ADAPTER 1
 
 // Model string reported in identity messages
