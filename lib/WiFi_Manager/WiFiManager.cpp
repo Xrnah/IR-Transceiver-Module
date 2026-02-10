@@ -90,7 +90,7 @@ void CustomWiFi::WiFiManager::handleConnection() {
     case CustomWiFi::WiFiState::DISCONNECTED:
       logInfo(k_log_tag, "Starting connection process...");
       if (strlen(hidden_ssid) > 0) {
-        startConnection(hidden_ssid, hidden_pass, CustomWiFi::WiFiState::CONNECTING_HIDDEN);
+        startConnection(hidden_ssid, hidden_pass, CustomWiFi::WiFiState::CONNECTING_HIDDEN, true);
       } else {
         trySavedCredentials();
       }
@@ -127,11 +127,15 @@ void CustomWiFi::WiFiManager::trySavedCredentials() {
   }
 }
 
-void CustomWiFi::WiFiManager::startConnection(const char* ssid, const char* password, WiFiState next_state) {
+void CustomWiFi::WiFiManager::startConnection(const char* ssid, const char* password, WiFiState next_state, bool mask_ssid) {
   WiFi.disconnect(); 
   yield(); // Feed WDT before intensive radio work
   WiFi.begin(ssid, password);
-  logInfo(k_log_tag, "Trying to connect to WiFi: %s", ssid);
+  if (mask_ssid) {
+    logInfo(k_log_tag, "Trying to connect to hidden WiFi.");
+  } else {
+    logInfo(k_log_tag, "Trying to connect to WiFi: %s", ssid);
+  }
   current_state = next_state;
   last_attempt_time = millis();
 }
@@ -143,9 +147,9 @@ void CustomWiFi::WiFiManager::checkConnectionProgress() {
     formatIpAddress(ip_buffer, sizeof(ip_buffer), WiFi.localIP());
     logInfo(k_log_tag, "IP Address: %s", ip_buffer);
 
-    // Only save if we connected via a dynamic method (Scan or Hidden manual override)
-    if (current_state == CustomWiFi::WiFiState::CONNECTING_SCANNED || 
-        current_state == CustomWiFi::WiFiState::CONNECTING_HIDDEN) {
+    // Only save if we connected via scan and no hidden credentials were provided in flash.
+    if (current_state == CustomWiFi::WiFiState::CONNECTING_SCANNED &&
+        strlen(hidden_ssid) == 0) {
       logInfo(k_log_tag, "Saving successful credentials to EEPROM...");
       saveWiFiToEEPROM(WiFi.SSID().c_str(), WiFi.psk().c_str());
     }

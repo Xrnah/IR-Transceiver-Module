@@ -90,7 +90,7 @@ namespace CustomWiFi {
 
     // --- Core Logic ---
     void trySavedCredentials();
-    void startConnection(const char* ssid, const char* password, WiFiState next_state);
+    void startConnection(const char* ssid, const char* password, WiFiState next_state, bool mask_ssid = false);
     void checkConnectionProgress();
     
     // Split scan into two phases for non-blocking operation
