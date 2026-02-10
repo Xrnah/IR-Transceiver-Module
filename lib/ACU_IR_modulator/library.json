@@ -1,0 +1,8 @@
+{
+  "name": "ACU_IR_modulator",
+  "version": "0.1.0",
+  "frameworks": "arduino",
+  "platforms": "espressif8266",
+  "srcDir": ".",
+  "includeDir": "."
+}

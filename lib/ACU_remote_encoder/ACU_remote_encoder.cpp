@@ -6,8 +6,11 @@ constexpr const char* k_log_tag = "ACU";
 } // namespace
 
 // Constructor: initialize with AC unit signature (e.g., brand/protocol type)
-ACURemote::ACURemote(String signature)
-  : signature(signature) {}
+ACURemote::ACURemote(ACURemoteSignature signature)
+  : signature_(signature) {}
+
+ACURemote::ACURemote(const char* signature_str)
+  : signature_(parseSignature(signature_str)) {}
 
 // ====== State Setters ======
 // Individually set parts of the remote control state
@@ -134,8 +137,13 @@ bool ACURemote::fromJSON(JsonObjectConst doc) {
 
 // Return protocol/brand-specific 4-bit identifier
 uint8_t ACURemote::encodeSignature() const {
-  if (signature == "MITSUBISHI_HEAVY_64") return 0b0101;
-  return 0b0000;  // Default fallback
+  switch (signature_) {
+    case ACURemoteSignature::MitsubishiHeavy64:
+      return 0b0101;
+    case ACURemoteSignature::Unknown:
+    default:
+      return 0b0000;  // Default fallback
+  }
 }
 
 // Fan speed encoded as 4 bits
@@ -215,4 +223,12 @@ const char* ACURemote::modeToString(ACUMode mode) const {
     case ACUMode::FAN:  return "fan";
     default: return "invalid";
   }
+}
+
+ACURemoteSignature ACURemote::parseSignature(const char* signature_str) {
+  if (signature_str == nullptr) return ACURemoteSignature::Unknown;
+  if (strcmp(signature_str, "MITSUBISHI_HEAVY_64") == 0) {
+    return ACURemoteSignature::MitsubishiHeavy64;
+  }
+  return ACURemoteSignature::Unknown;
 }

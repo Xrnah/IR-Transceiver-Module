@@ -23,6 +23,10 @@
 
 #pragma once
 
+#if !defined(ARDUINO_ARCH_ESP8266)
+#error "ESP8266 only"
+#endif
+
 #include <ESP8266WiFi.h>
 #include <ArduinoOTA.h>
 #include <EEPROM.h>

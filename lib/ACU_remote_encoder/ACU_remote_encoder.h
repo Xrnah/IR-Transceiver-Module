@@ -43,6 +43,11 @@ enum class ACUMode {
   INVALID
 };
 
+enum class ACURemoteSignature : uint8_t {
+  MitsubishiHeavy64,
+  Unknown
+};
+
 // ====== Data Structures ======
 
 // Struct representing the complete AC unit state.
@@ -60,7 +65,8 @@ typedef struct __attribute__((packed)) {
 class ACURemote {
 public:
   // Constructor: specify protocol signature (e.g., brand identifier)
-  ACURemote(String signature);
+  explicit ACURemote(ACURemoteSignature signature);
+  explicit ACURemote(const char* signature_str);
 
   // === State Setters ===
   void setFanSpeed(uint8_t speed);
@@ -92,7 +98,7 @@ public:
   bool fromJSON(JsonObjectConst doc);
 
 private:
-  String signature;           // AC brand/protocol identifier
+  ACURemoteSignature signature_; // AC brand/protocol identifier
   ACUState state;             // Internal ACU state
   uint64_t last_command = 0;   // Most recently encoded command
 
@@ -105,4 +111,6 @@ private:
 
   // Converts enum mode to its string representation
   const char* modeToString(ACUMode mode) const;
+
+  static ACURemoteSignature parseSignature(const char* signature_str);
 };
