@@ -70,6 +70,23 @@
 namespace {
 
 constexpr const char* k_log_tag = "MQTT";
+constexpr size_t k_error_payload_max = 128;
+constexpr size_t k_error_payload_buf = k_error_payload_max + 1;
+constexpr size_t k_error_str_max = 32;
+constexpr size_t k_error_topic_max = 64;
+
+struct ErrorContextSnapshot {
+  bool has_data = false;
+  char error[k_error_str_max] = {0};
+  char topic[k_error_topic_max] = {0};
+  char payload[k_error_payload_buf] = {0};
+  unsigned int payload_len = 0;
+  int rc = 0;
+  bool has_payload = false;
+};
+
+ErrorContextSnapshot g_last_error_ctx;
+bool g_has_queued_error_ctx = false;
 
 // =================================================================================
 // 1. CONFIGURATION & CONSTANTS
@@ -217,6 +234,9 @@ uint32_t g_heap_frag_cached = 0;
 // =================================================================================
 
 void publishMQTTErrorContext(const char* error, const char* topic, const uint8_t* payload, unsigned int length, int rc);
+bool publishErrorContextSnapshot(const ErrorContextSnapshot& snapshot);
+void queueErrorContextSnapshot(const ErrorContextSnapshot& snapshot);
+void publishQueuedErrorContextIfAny();
 
 bool isTopicMatchingModule(char* topic) {
   return strcmp(topic, g_mqtt_topic_sub_unit) == 0;
@@ -388,38 +408,34 @@ void publishMQTTErrorContext(const char* error, const char* topic, const uint8_t
   const char* topic_str = (topic != nullptr) ? topic : "n/a";
   logError(k_log_tag, "Error context: %s (topic=%s rc=%d len=%u)", error_str, topic_str, rc, length);
 
-#if LOG_LEVEL >= LOG_MQTT_ERROR_CONTEXT_LEVEL
-  if (!g_mqtt_client.connected()) return;
-
-  StaticJsonDocument<384> error_doc;
-  char time_buffer[30];
-  getTimestamp(time_buffer, sizeof(time_buffer));
-  error_doc["ts"] = time_buffer;
-  error_doc["error"] = error_str;
-  error_doc["broker"] = g_mqtt_server;
-  error_doc["port"] = g_mqtt_port;
-  if (topic != nullptr) error_doc["topic"] = topic;
-  if (rc != 0) error_doc["rc"] = rc;
+#if LOG_LEVEL >= LOG_MQTT_ERROR_CONTEXT_MIN_LOG_LEVEL
+  ErrorContextSnapshot snapshot;
+  snapshot.has_data = true;
+  strncpy(snapshot.error, error_str, sizeof(snapshot.error) - 1);
+  if (topic != nullptr) {
+    strncpy(snapshot.topic, topic, sizeof(snapshot.topic) - 1);
+  } else {
+    strncpy(snapshot.topic, "n/a", sizeof(snapshot.topic) - 1);
+  }
+  snapshot.rc = rc;
 
   if (payload != nullptr && length > 0) {
-    constexpr size_t k_payload_max = 128;
-    char payload_buf[k_payload_max];
-    size_t copy_len = (length < (k_payload_max - 1)) ? length : (k_payload_max - 1);
-    memcpy(payload_buf, payload, copy_len);
-    payload_buf[copy_len] = '\0';
-    error_doc["payload_len"] = length;
-    error_doc["payload"] = payload_buf;
+    size_t copy_len = (length < k_error_payload_max) ? length : k_error_payload_max;
+    memcpy(snapshot.payload, payload, copy_len);
+    snapshot.payload[copy_len] = '\0';
+    snapshot.payload_len = length;
+    snapshot.has_payload = true;
   }
 
-  char output[384];
-  size_t n = serializeJson(error_doc, output, sizeof(output));
-  bool is_ok = g_mqtt_client.publish(
-    g_mqtt_topic_pub_error,
-    (const uint8_t*)output,
-    n,
-    false
-  );
-  if (!is_ok) g_mqtt_publish_failures++;
+  if (!g_mqtt_client.connected()) {
+    queueErrorContextSnapshot(snapshot);
+    return;
+  }
+
+  if (!publishErrorContextSnapshot(snapshot)) {
+    g_mqtt_publish_failures++;
+    queueErrorContextSnapshot(snapshot);
+  }
 #else
   (void)payload;
   (void)length;
@@ -427,12 +443,59 @@ void publishMQTTErrorContext(const char* error, const char* topic, const uint8_t
 #endif
 }
 
+bool publishErrorContextSnapshot(const ErrorContextSnapshot& snapshot) {
+  if (!snapshot.has_data) return true;
+
+  StaticJsonDocument<384> error_doc;
+  char time_buffer[30];
+  getTimestamp(time_buffer, sizeof(time_buffer));
+  error_doc["ts"] = time_buffer;
+  error_doc["error"] = snapshot.error;
+  error_doc["broker"] = g_mqtt_server;
+  error_doc["port"] = g_mqtt_port;
+  if (snapshot.topic[0] != '\0' && strcmp(snapshot.topic, "n/a") != 0) {
+    error_doc["topic"] = snapshot.topic;
+  }
+  if (snapshot.rc != 0) error_doc["rc"] = snapshot.rc;
+
+  if (snapshot.has_payload) {
+    error_doc["payload_len"] = snapshot.payload_len;
+    error_doc["payload"] = snapshot.payload;
+  }
+
+  char output[384];
+  size_t n = serializeJson(error_doc, output, sizeof(output));
+  return g_mqtt_client.publish(
+    g_mqtt_topic_pub_error,
+    (const uint8_t*)output,
+    n,
+    false
+  );
+}
+
+void queueErrorContextSnapshot(const ErrorContextSnapshot& snapshot) {
+  g_last_error_ctx = snapshot;
+  g_has_queued_error_ctx = true;
+}
+
+void publishQueuedErrorContextIfAny() {
+#if LOG_LEVEL >= LOG_MQTT_ERROR_CONTEXT_MIN_LOG_LEVEL
+  if (!g_has_queued_error_ctx) return;
+  if (!g_mqtt_client.connected()) return;
+  if (publishErrorContextSnapshot(g_last_error_ctx)) {
+    g_has_queued_error_ctx = false;
+  } else {
+    g_mqtt_publish_failures++;
+  }
+#endif
+}
 
 void publishOnReconnect() {
   publishIdentity();
   publishDeployment();
   publishDiagnostics();
   publishMetrics();
+  publishQueuedErrorContextIfAny();
 
   // Republish last known state if available
   if (g_last_received_command_json[0] != '\0') {
@@ -490,7 +553,7 @@ void handleReceivedCommand(char* topic, byte* payload, unsigned int length) {
 #if USE_ACU_ADAPTER
   logDebug(k_log_tag, "JSON parsed. Adapter: %s", g_acu_adapter.name());
 #else
-  logDebug(k_log_tag, "JSON parsed. Using legacy IR modulator.");
+  logDebug(k_log_tag, "JSON parsed. Using MHI_64 IR modulator.");
 #endif
 
   yield(); // Allow ESP8266 background tasks
@@ -739,8 +802,4 @@ void mqttDisconnect() {
   if (g_mqtt_client.connected()) {
     g_mqtt_client.disconnect();
   }
-}
-
-void incrementWifiDisconnectCounter() {
-  g_wifi_disconnect_counter++;
 }
