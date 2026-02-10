@@ -280,12 +280,12 @@ void publishOnReconnect() {
 void publishHeartbeat() {
   if (!g_mqtt_client.connected()) return;
 
-  if ((long)(millis() - g_last_heartbeat_time) >= g_heartbeat_interval_ms) {
+  if (millis() - g_last_heartbeat_time >= g_heartbeat_interval_ms) {
     publishDiagnostics();
     g_last_heartbeat_time = millis();
   }
 
-  if ((long)(millis() - g_last_metrics_time) >= g_metrics_interval_ms) {
+  if (millis() - g_last_metrics_time >= g_metrics_interval_ms) {
     publishMetrics();
     g_last_metrics_time = millis();
   }
