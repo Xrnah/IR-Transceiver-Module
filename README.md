@@ -82,6 +82,27 @@ Define NTP servers in `include/secrets.h`:
 - `NTP_SERVER_2`
 Time sync is fixed to UTC+8 in `lib/NTP/NTP.cpp`.
 
+### Build Flags (Logging)
+Define logging flags in `platformio.ini` or `platformio.override.ini` under `build_flags`:
+- `-DLOG_SERIAL_ENABLE=0` enables/disables Serial logging output (`0`/`1`).
+- `-DLOG_LEVEL=3` sets verbosity (`0`=Error, `1`=Warn, `2`=Info, `3`=Debug).
+- `-DLOG_MQTT_ERROR_CONTEXT_MIN_LOG_LEVEL=3` controls MQTT `/error` publishing (`0`-`3`, `255`=off). Publishing is enabled when `LOG_LEVEL >= LOG_MQTT_ERROR_CONTEXT_MIN_LOG_LEVEL`.
+Defaults when not defined:
+- `LOG_LEVEL` defaults to `2` (Info).
+- `LOG_SERIAL_ENABLE` defaults to `1` when `LOG_LEVEL > 1`, otherwise `0`.
+- `LOG_MQTT_ERROR_CONTEXT_MIN_LOG_LEVEL` defaults to `3` (or `LOG_MQTT_ERROR_CONTEXT_LEVEL` when defined).
+
+### Boot/Reset Notes (ESP8266)
+Observed behavior during development:
+- `boot mode:(1,7)` indicates UART download mode (GPIO0 low at reset). This can be caused by USB-serial auto-reset lines or weak pull-ups on GPIO0/GPIO2.
+- When `LOG_SERIAL_ENABLE=0`, `setup()` skips `Serial.begin()` and the startup delay, which can change boot timing and make strap/auto-reset timing issues more visible.
+- Reflashing can temporarily mask the behavior because the adapter toggles reset/boot pins in a different sequence.
+
+Recommendations (documented, implemented):
+- Consider disabling serial auto-reset during monitor use by setting `monitor_rts=0` and `monitor_dtr=0` (see commented lines in `platformio.ini`).
+- Ensure proper pull-ups on GPIO0/GPIO2 for ESP-01/ESP-01M modules.
+- If changing `build_flags`, do a clean rebuild (`pio run -t clean`) to avoid stale flag state.
+
 ## Code Conventions
 See `CONVENTIONS.md` for naming rules, logging behavior, and review guidance.
 
