@@ -12,18 +12,18 @@
 #include "ACU_remote_encoder.h"
 
 // Protocol adapter interface
-class IAcuAdapter {
+class IACUAdapter {
 public:
-  virtual ~IAcuAdapter() = default;
+  virtual ~IACUAdapter() = default;
   virtual void begin() = 0;
   virtual bool send(const ACUState &state) = 0;
   virtual const char* name() const = 0;
 };
 
 // Mitsubishi Heavy 88-bit adapter
-class Mhi88Adapter : public IAcuAdapter {
+class MHI88Adapter : public IACUAdapter {
 public:
-  explicit Mhi88Adapter(uint16_t pin = 4);
+  explicit MHI88Adapter(uint16_t pin = 4);
   void begin() override;
   bool send(const ACUState &state) override;
   const char* name() const override;
@@ -33,9 +33,9 @@ private:
 };
 
 // Mitsubishi Heavy 152-bit adapter
-class Mhi152Adapter : public IAcuAdapter {
+class MHI152Adapter : public IACUAdapter {
 public:
-  explicit Mhi152Adapter(uint16_t pin = 4);
+  explicit MHI152Adapter(uint16_t pin = 4);
   void begin() override;
   bool send(const ACUState &state) override;
   const char* name() const override;

@@ -42,7 +42,7 @@ bool ACURemote::getPowerState() const {
 }
 
 uint64_t ACURemote::getLastCommand() const {
-  return lastCommand;
+  return last_command;
 }
 
 ACUState ACURemote::getState() const {
@@ -65,8 +65,8 @@ uint64_t ACURemote::encodeCommand() {
   command |= encodeLouver();                         // Louver setting
 
   uint32_t complement = ~command;                    // Calculate bitwise complement
-  lastCommand = ((uint64_t)command << 32) | complement;
-  return lastCommand;
+  last_command = ((uint64_t)command << 32) | complement;
+  return last_command;
 }
 
 // ====== Utility: Convert 64-bit to Binary String Buffer ======
@@ -113,17 +113,17 @@ bool ACURemote::fromJSON(JsonObjectConst doc) {
   // Extract and convert values
   uint8_t fan_speed = doc["fan_speed"];
   uint8_t temp = doc["temperature"];
-  const char* modeStr = doc["mode"];
+  const char* mode_str = doc["mode"];
   uint8_t louver = doc["louver"];
   bool power = doc["power"];
 
   // Convert mode string to enum
   ACUMode mode;
-  if (strcmp(modeStr, "auto") == 0) mode = ACUMode::AUTO;
-  else if (strcmp(modeStr, "cool") == 0) mode = ACUMode::COOL;
-  else if (strcmp(modeStr, "heat") == 0) mode = ACUMode::HEAT;
-  else if (strcmp(modeStr, "dry") == 0) mode = ACUMode::DRY;
-  else if (strcmp(modeStr, "fan") == 0) mode = ACUMode::FAN;
+  if (strcmp(mode_str, "auto") == 0) mode = ACUMode::AUTO;
+  else if (strcmp(mode_str, "cool") == 0) mode = ACUMode::COOL;
+  else if (strcmp(mode_str, "heat") == 0) mode = ACUMode::HEAT;
+  else if (strcmp(mode_str, "dry") == 0) mode = ACUMode::DRY;
+  else if (strcmp(mode_str, "fan") == 0) mode = ACUMode::FAN;
   else return false;  // Unrecognized mode
 
   setState(fan_speed, temp, mode, louver, power);

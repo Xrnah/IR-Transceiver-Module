@@ -8,7 +8,15 @@
 #endif
 
 #ifndef LOG_SERIAL_ENABLE
-  #define LOG_SERIAL_ENABLE 1
+  #if LOG_LEVEL > 1
+    #define LOG_SERIAL_ENABLE 1
+  #else
+    #define LOG_SERIAL_ENABLE 0
+  #endif
+#endif
+
+#ifndef LOG_MQTT_ERROR_CONTEXT_LEVEL
+  #define LOG_MQTT_ERROR_CONTEXT_LEVEL 3
 #endif
 
 enum class LogLevel : uint8_t {
@@ -20,6 +28,10 @@ enum class LogLevel : uint8_t {
 
 /**
  * @brief Initialize logging after Serial.begin().
+ *
+ * LOG_SERIAL_ENABLE controls Serial initialization.
+ * LOG_LEVEL controls local log verbosity.
+ * LOG_MQTT_ERROR_CONTEXT_LEVEL controls MQTT /error publishing threshold.
  */
 void initLogging();
 

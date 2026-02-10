@@ -94,7 +94,7 @@ public:
 private:
   String signature;           // AC brand/protocol identifier
   ACUState state;             // Internal ACU state
-  uint64_t lastCommand = 0;   // Most recently encoded command
+  uint64_t last_command = 0;   // Most recently encoded command
 
   // === Encoding Helpers ===
   uint8_t encodeSignature() const;     // Brand-specific 4-bit identifier

@@ -6,7 +6,7 @@ constexpr const char* k_log_tag = "IR";
 } // namespace
 
 // Convert a 64-bit binary command into IR durations for sending via IR LED
-bool parseBinaryToDurations(uint64_t binaryInput, uint16_t *durations, size_t &len)
+bool parseBinaryToDurations(uint64_t binary_input, uint16_t *durations, size_t &len)
 {
     len = 0;  // Reset length for durations array
 
@@ -25,7 +25,7 @@ bool parseBinaryToDurations(uint64_t binaryInput, uint16_t *durations, size_t &l
         }
 
         // Extract the current bit value (0 or 1)
-        bool bit = (binaryInput >> i) & 1;
+        bool bit = (binary_input >> i) & 1;
         durations[len++] = g_selected_protocol->bit_mark;          // Add mark duration for bit start
         durations[len++] = bit ? g_selected_protocol->one_space : g_selected_protocol->zero_space;  // Add space duration depending on bit value
     }
@@ -46,7 +46,7 @@ bool parseBinaryToDurations(uint64_t binaryInput, uint16_t *durations, size_t &l
 }
 
 // Legacy method to convert a binary string (e.g. "110010...") into IR durations
-bool parseBinaryToDurations(const String &binaryInput, uint16_t *durations, size_t &len) {
+bool parseBinaryToDurations(const String &binary_input, uint16_t *durations, size_t &len) {
     len = 0;  // Reset durations length
 
     // Add header mark and space durations
@@ -54,14 +54,14 @@ bool parseBinaryToDurations(const String &binaryInput, uint16_t *durations, size
     durations[len++] = g_selected_protocol->hdr_space;
 
     // Iterate over each character (bit) in the string
-    for (size_t i = 0; i < binaryInput.length(); i++) {
+    for (size_t i = 0; i < binary_input.length(); i++) {
         // Check buffer size before adding durations
         if (len + 2 > raw_data_length) {
             // Error: Durations array overflow!
             return false;
         }
 
-        char bit = binaryInput[i];
+        char bit = binary_input[i];
         durations[len++] = g_selected_protocol->bit_mark;  // Add mark duration
 
         // Add space duration depending on bit value
@@ -88,12 +88,12 @@ bool parseBinaryToDurations(const String &binaryInput, uint16_t *durations, size
 void debugIRInput() {
     if (Serial.available()) {
         // Read input line from Serial
-        String binaryInput = Serial.readStringUntil('\n');
-        binaryInput.trim();                // Remove whitespace
-        binaryInput.replace(" ", "");     // Remove spaces
+        String binary_input = Serial.readStringUntil('\n');
+        binary_input.trim();                // Remove whitespace
+        binary_input.replace(" ", "");     // Remove spaces
 
         // Validate input length (must be exactly 64 bits)
-        if (binaryInput.length() != 64) {
+        if (binary_input.length() != 64) {
             logWarn(k_log_tag, "Invalid input! Please enter exactly 64 bits.");
             return;
         }
@@ -102,7 +102,7 @@ void debugIRInput() {
         size_t len = 0;
 
         // Convert binary string to durations array
-        if (parseBinaryToDurations(binaryInput, local_durations, len)) {
+        if (parseBinaryToDurations(binary_input, local_durations, len)) {
             // Send IR signal at 38 kHz carrier frequency
             g_ir_send.sendRaw(local_durations, len, 38);
 

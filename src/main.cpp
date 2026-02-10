@@ -38,12 +38,12 @@ constexpr unsigned long wifi_loop_delay_ms = 10;
 
 // DEBUG OPTIONS
 // #define ENABLE_TIMER_ROUTINE
-// #define ENABLE_IR_DEBUG_INPUT // Enables raw binary ACU instruction via Serial (requires LOG_SERIAL_ENABLE and LOG_LEVEL > 1)
+// #define ENABLE_IR_DEBUG_INPUT // Enables raw binary ACU instruction via Serial (requires LOG_SERIAL_ENABLE)
 
 // ─────────────────────────────────────────────
 // 🔧 Global Objects
 // ─────────────────────────────────────────────
-CustomWiFi::WiFiManager wifiManager;           // WiFi manager instance
+CustomWiFi::WiFiManager g_wifi_manager;           // WiFi manager instance
 #if !USE_ACU_ADAPTER
   IRsend g_ir_send(ir_led_pin);                      // IR transmitter
   uint16_t g_durations[raw_data_length];             // Pulse duration buffer
@@ -51,14 +51,14 @@ CustomWiFi::WiFiManager wifiManager;           // WiFi manager instance
 #endif
 
 #if ENABLE_TIMER_ROUTINE
-  volatile uint32_t lastTimerEvent = 0;
-  const uint32_t timerInterval = 1000; // 1 second
+  uint32_t g_last_timer_event_ms = 0;
+  constexpr uint32_t timer_interval_ms = 1000; // 1 second
 #endif
 // ─────────────────────────────────────────────
 // 🛠️ Setup (runs once on boot)
 // ─────────────────────────────────────────────
 void setup() {
-  #if LOG_SERIAL_ENABLE && (LOG_LEVEL > 1)
+  #if LOG_SERIAL_ENABLE
     Serial.begin(115200);
     delay(startup_delay_ms); // Startup delay for serial debugging. This is skipped in release builds.
     initLogging();
@@ -71,10 +71,10 @@ void setup() {
   g_ir_send.begin();
 #endif
 
-  wifiManager.begin(HIDDEN_SSID, HIDDEN_PASS);
+  g_wifi_manager.begin(HIDDEN_SSID, HIDDEN_PASS);
 
   while (WiFi.status() != WL_CONNECTED) {
-    wifiManager.handleConnection(); // Let the state machine run
+    g_wifi_manager.handleConnection(); // Let the state machine run
     delay(wifi_loop_delay_ms); // Small delay to prevent busy-waiting
   }
 
@@ -88,7 +88,7 @@ void setup() {
 // 🔁 Main Loop
 // ─────────────────────────────────────────────
 void loop() {
-  wifiManager.handleConnection(); 
+  g_wifi_manager.handleConnection(); 
 
   updateConnectionStats();
 
@@ -97,9 +97,9 @@ void loop() {
   }
 
   #if ENABLE_TIMER_ROUTINE
-  uint32_t now = millis();
-    if ((uint32_t)(now - lastTimerEvent) >= timerInterval) {
-    lastTimerEvent = millis(); // Update the time of the last event
+  uint32_t now_ms = millis();
+    if ((uint32_t)(now_ms - g_last_timer_event_ms) >= timer_interval_ms) {
+    g_last_timer_event_ms = now_ms; // Update the time of the last event
 
     logDebug(k_log_tag, "Periodic task executed.");
     logDebug(k_log_tag, "Free heap: %u", ESP.getFreeHeap());
@@ -108,8 +108,10 @@ void loop() {
   #endif
 
   #if !USE_ACU_ADAPTER
-    #ifdef ENABLE_IR_DEBUG_INPUT
-    debugIRInput();           // Optional IR test via Serial input
+    #if LOG_SERIAL_ENABLE
+      #ifdef ENABLE_IR_DEBUG_INPUT
+      debugIRInput();           // Optional IR test via Serial input
+      #endif
     #endif
   #endif
 }

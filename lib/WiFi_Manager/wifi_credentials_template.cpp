@@ -24,13 +24,13 @@ namespace CustomWiFi {
 // --- Shared Passwords ---
 const char* constantPASS1 = "PASS1";
 
-const WiFiCredential wifiTable[] = {
+const WiFiCredential k_wifi_table[] = {
     {"WiFI", constantPASS1},
     {"through", "anotherPass"},
     {"Example", "ThisIsThePassword"},
     // Add more networks here
 };
 
-const int WIFI_COUNT = sizeof(wifiTable) / sizeof(wifiTable[0]);
+const int k_wifi_count = sizeof(k_wifi_table) / sizeof(k_wifi_table[0]);
 
 } // namespace CustomWiFi

@@ -1,6 +1,6 @@
 #include "ACU_ir_adapters.h"
 
-static uint8_t mapModeToMhi(ACUMode mode) {
+static uint8_t mapModeToMHI(ACUMode mode) {
   switch (mode) {
     case ACUMode::COOL: return kMitsubishiHeavyCool;
     case ACUMode::HEAT: return kMitsubishiHeavyHeat;
@@ -59,17 +59,17 @@ static uint8_t mapSwingV152(uint8_t louver) {
   }
 }
 
-Mhi88Adapter::Mhi88Adapter(uint16_t pin)
+MHI88Adapter::MHI88Adapter(uint16_t pin)
   : ir(pin) {}
 
-void Mhi88Adapter::begin() {
+void MHI88Adapter::begin() {
   ir.begin();
 }
 
-bool Mhi88Adapter::send(const ACUState &state) {
+bool MHI88Adapter::send(const ACUState &state) {
   ir.stateReset();
   ir.setPower(state.power);
-  ir.setMode(mapModeToMhi(state.mode));
+  ir.setMode(mapModeToMHI(state.mode));
   ir.setTemp(state.temperature);
   ir.setFan(mapFan88(state.fan_speed));
   ir.setSwingVertical(mapSwingV88(state.louver));
@@ -78,21 +78,21 @@ bool Mhi88Adapter::send(const ACUState &state) {
   return true;
 }
 
-const char* Mhi88Adapter::name() const {
+const char* MHI88Adapter::name() const {
   return "MHI-88";
 }
 
-Mhi152Adapter::Mhi152Adapter(uint16_t pin)
+MHI152Adapter::MHI152Adapter(uint16_t pin)
   : ir(pin) {}
 
-void Mhi152Adapter::begin() {
+void MHI152Adapter::begin() {
   ir.begin();
 }
 
-bool Mhi152Adapter::send(const ACUState &state) {
+bool MHI152Adapter::send(const ACUState &state) {
   ir.stateReset();
   ir.setPower(state.power);
-  ir.setMode(mapModeToMhi(state.mode));
+  ir.setMode(mapModeToMHI(state.mode));
   ir.setTemp(state.temperature);
   ir.setFan(mapFan152(state.fan_speed));
   ir.setSwingVertical(mapSwingV152(state.louver));
@@ -101,6 +101,6 @@ bool Mhi152Adapter::send(const ACUState &state) {
   return true;
 }
 
-const char* Mhi152Adapter::name() const {
+const char* MHI152Adapter::name() const {
   return "MHI-152";
 }

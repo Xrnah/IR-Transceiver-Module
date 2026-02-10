@@ -17,9 +17,9 @@ namespace CustomWiFi {
   };
 
   // Declare the array of credentials as extern
-  extern const WiFiCredential wifiTable[];
+  extern const WiFiCredential k_wifi_table[];
 
   // Declare the number of credentials
-  extern const int WIFI_COUNT;
+  extern const int k_wifi_count;
 
 } // namespace CustomWiFi

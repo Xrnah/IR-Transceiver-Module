@@ -114,22 +114,22 @@ void CustomWiFi::WiFiManager::handleConnection() {
 }
 
 void CustomWiFi::WiFiManager::trySavedCredentials() {
-  char savedSSID[ssid_max_len], savedPass[pass_max_len];
-  if (readWiFiFromEEPROM(savedSSID, savedPass)) {
-    logInfo(k_log_tag, "Trying saved WiFi: %s", savedSSID);
-    startConnection(savedSSID, savedPass, CustomWiFi::WiFiState::CONNECTING_SAVED);
+  char saved_ssid[ssid_max_len], saved_pass[pass_max_len];
+  if (readWiFiFromEEPROM(saved_ssid, saved_pass)) {
+    logInfo(k_log_tag, "Trying saved WiFi: %s", saved_ssid);
+    startConnection(saved_ssid, saved_pass, CustomWiFi::WiFiState::CONNECTING_SAVED);
   } else {
     logInfo(k_log_tag, "No saved credentials. Queuing scan...");
     current_state = CustomWiFi::WiFiState::START_SCAN;
   }
 }
 
-void CustomWiFi::WiFiManager::startConnection(const char* ssid, const char* password, WiFiState nextState) {
+void CustomWiFi::WiFiManager::startConnection(const char* ssid, const char* password, WiFiState next_state) {
   WiFi.disconnect(); 
   yield(); // Feed WDT before intensive radio work
   WiFi.begin(ssid, password);
   logInfo(k_log_tag, "Trying to connect to WiFi: %s", ssid);
-  current_state = nextState;
+  current_state = next_state;
   last_attempt_time = millis();
 }
 
@@ -197,16 +197,16 @@ void CustomWiFi::WiFiManager::handleScanResult() {
 
   logInfo(k_log_tag, "Found %d networks.", n);
   
-  int bestIndex = -1;
-  int bestRSSI = -1000;
+  int best_index = -1;
+  int best_rssi = -1000;
 
   // Search for known networks in the scan results
   for (int i = 0; i < n; ++i) {
-    for (int j = 0; j < WIFI_COUNT; j++) {
-      if (strcmp(WiFi.SSID(i).c_str(), wifiTable[j].ssid) == 0) {
-        if (WiFi.RSSI(i) > bestRSSI) {
-          bestRSSI = WiFi.RSSI(i);
-          bestIndex = j;
+    for (int j = 0; j < k_wifi_count; j++) {
+      if (strcmp(WiFi.SSID(i).c_str(), k_wifi_table[j].ssid) == 0) {
+        if (WiFi.RSSI(i) > best_rssi) {
+          best_rssi = WiFi.RSSI(i);
+          best_index = j;
         }
       }
     }
@@ -215,10 +215,10 @@ void CustomWiFi::WiFiManager::handleScanResult() {
 
   WiFi.scanDelete(); // Clean up RAM
 
-  if (bestIndex != -1) {
-    const char* ssid = wifiTable[bestIndex].ssid;
-    const char* password = wifiTable[bestIndex].password;
-    logInfo(k_log_tag, "Found strongest known SSID: %s (%d dBm)", ssid, bestRSSI);
+  if (best_index != -1) {
+    const char* ssid = k_wifi_table[best_index].ssid;
+    const char* password = k_wifi_table[best_index].password;
+    logInfo(k_log_tag, "Found strongest known SSID: %s (%d dBm)", ssid, best_rssi);
     startConnection(ssid, password, CustomWiFi::WiFiState::CONNECTING_SCANNED);
   } else {
     logWarn(k_log_tag, "No known networks found.");

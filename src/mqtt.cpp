@@ -117,8 +117,8 @@ WiFiClient g_esp_client;
 PubSubClient g_mqtt_client(g_esp_client);
 ACURemote g_acu_remote("MITSUBISHI_HEAVY_64");
 #if USE_ACU_ADAPTER
-  // IR adapter selection (switch to Mhi152Adapter if needed)
-  Mhi88Adapter g_acu_adapter;
+  // IR adapter selection (switch to MHI152Adapter if needed)
+  MHI88Adapter g_acu_adapter;
 #endif
 // ─────────────────────────────────────────────
 // 📝 Buffers
@@ -216,7 +216,7 @@ uint32_t g_heap_frag_cached = 0;
 // 3. INTERNAL UTILITIES
 // =================================================================================
 
-void publishMqttErrorContext(const char* error, const char* topic, const uint8_t* payload, unsigned int length, int rc);
+void publishMQTTErrorContext(const char* error, const char* topic, const uint8_t* payload, unsigned int length, int rc);
 
 bool isTopicMatchingModule(char* topic) {
   return strcmp(topic, g_mqtt_topic_sub_unit) == 0;
@@ -250,8 +250,8 @@ void publishACUState(const JsonObject& state_obj) {
   if (is_ok) {
     logInfo(k_log_tag, "Published state: %s", g_state_pub_output);
   } else {
-    logError(k_log_tag, "Publish failed.");
-    publishMqttErrorContext("publish_failed", g_mqtt_topic_pub_state, (const uint8_t*)g_state_pub_output, len, 0);
+    logError(k_log_tag, "Publish failed (topic=%s len=%u).", g_mqtt_topic_pub_state, (unsigned int)len);
+    publishMQTTErrorContext("publish_failed", g_mqtt_topic_pub_state, (const uint8_t*)g_state_pub_output, len, 0);
     g_mqtt_publish_failures++;
   }
 }
@@ -383,12 +383,12 @@ void publishMetrics() {
   logDebug(k_log_tag, "Metrics published: %s", g_metrics_output);
 }
 
-void publishMqttErrorContext(const char* error, const char* topic, const uint8_t* payload, unsigned int length, int rc) {
-#if LOG_LEVEL >= 3
+void publishMQTTErrorContext(const char* error, const char* topic, const uint8_t* payload, unsigned int length, int rc) {
   const char* error_str = (error != nullptr) ? error : "unknown_error";
   const char* topic_str = (topic != nullptr) ? topic : "n/a";
   logError(k_log_tag, "Error context: %s (topic=%s rc=%d len=%u)", error_str, topic_str, rc, length);
 
+#if LOG_LEVEL >= LOG_MQTT_ERROR_CONTEXT_LEVEL
   if (!g_mqtt_client.connected()) return;
 
   StaticJsonDocument<384> error_doc;
@@ -421,8 +421,6 @@ void publishMqttErrorContext(const char* error, const char* topic, const uint8_t
   );
   if (!is_ok) g_mqtt_publish_failures++;
 #else
-  (void)error;
-  (void)topic;
   (void)payload;
   (void)length;
   (void)rc;
@@ -471,8 +469,8 @@ void handleReceivedCommand(char* topic, byte* payload, unsigned int length) {
   StaticJsonDocument<256> doc;
   DeserializationError err = deserializeJson(doc, payload, length);
   if (err) {
-    logError(k_log_tag, "JSON parse failed: %s", err.c_str());
-    publishMqttErrorContext("json_parse_failed", topic, payload, length, 0);
+    logError(k_log_tag, "JSON parse failed: %s (topic=%s len=%u)", err.c_str(), topic, length);
+    publishMQTTErrorContext("json_parse_failed", topic, payload, length, 0);
     g_commands_failed_parse++;
     return;
   }
@@ -483,8 +481,8 @@ void handleReceivedCommand(char* topic, byte* payload, unsigned int length) {
   JsonObjectConst state_obj = doc.containsKey("state") ? doc["state"] : doc.as<JsonObjectConst>();
 
   if (!g_acu_remote.fromJSON(state_obj)) {
-    logError(k_log_tag, "Invalid command structure.");
-    publishMqttErrorContext("invalid_command_structure", topic, payload, length, 0);
+    logError(k_log_tag, "Invalid command structure (topic=%s len=%u).", topic, length);
+    publishMQTTErrorContext("invalid_command_structure", topic, payload, length, 0);
     g_commands_failed_struct++;
     return;
   }
@@ -502,8 +500,8 @@ void handleReceivedCommand(char* topic, byte* payload, unsigned int length) {
   if (g_acu_adapter.send(g_acu_remote.getState())) {
     g_commands_executed_counter++;
   } else {
-    logError(k_log_tag, "Failed to send IR command.");
-    publishMqttErrorContext("ir_send_failed", topic, payload, length, 0);
+    logError(k_log_tag, "Failed to send IR command (topic=%s len=%u).", topic, length);
+    publishMQTTErrorContext("ir_send_failed", topic, payload, length, 0);
     g_commands_failed_ir++;
     return; // Stop processing this command
   }
@@ -515,8 +513,8 @@ void handleReceivedCommand(char* topic, byte* payload, unsigned int length) {
     g_ir_send.sendRaw(g_durations, len, 38);
     g_commands_executed_counter++;
   } else {
-    logError(k_log_tag, "Failed to parse command for IR sending.");
-    publishMqttErrorContext("ir_parse_failed", topic, payload, length, 0);
+    logError(k_log_tag, "Failed to parse command for IR sending (topic=%s len=%u).", topic, length);
+    publishMQTTErrorContext("ir_parse_failed", topic, payload, length, 0);
     g_commands_failed_ir++;
     return; // Stop processing this command
   }
@@ -631,8 +629,8 @@ void reconnectMQTT() {
       publishOnReconnect();
     } else {
       int rc = g_mqtt_client.state();
-      logError(k_log_tag, "Connect failed (rc=%d), retrying...", rc);
-      publishMqttErrorContext("connect_failed", nullptr, nullptr, 0, rc);
+      logError(k_log_tag, "Connect failed (rc=%d broker=%s port=%d), retrying...", rc, g_mqtt_server, g_mqtt_port);
+      publishMQTTErrorContext("connect_failed", nullptr, nullptr, 0, rc);
     }
   }
 }
