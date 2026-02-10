@@ -1,5 +1,9 @@
 #include <Arduino.h>
 
+#if !defined(ARDUINO_ARCH_ESP8266)
+#error "ESP8266 only"
+#endif
+
 // Initialized variables
 #include "secrets.h"
 #include "logging.h"
