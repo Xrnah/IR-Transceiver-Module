@@ -7,8 +7,9 @@ Status: prototype / lab-tested. IR protocol support is focused on Mitsubishi Hea
 ## Features
 - MQTT-controlled wireless IR transmission
 - JSON payloads for power, mode, fan speed, temperature, and louver position
-- Auto-connect to campus Wi-Fi (pre-filled SSID table)
-- Custom `ACU_remote_encoder` and `ACU_IR_modulator` libraries (based on IRremoteESP8266 v2.8.6)
+- Auto-connect to campus Wi-Fi using a pre-filled SSID table with EEPROM caching
+- Two IR pipelines: raw 64-bit modulator or IRremoteESP8266 adapters (MHI88/MHI152)
+- Telemetry topics for identity, deployment, diagnostics, metrics, and error context
 - OTA updates: not enabled (planned)
 
 ## Hardware Requirements
@@ -39,6 +40,10 @@ This project assumes the prebuilt ESP01M IR transceiver module. If you are using
 Create `include/secrets.h` from the template:
 - Copy `include/secrets_template.h` to `include/secrets.h`
 - Edit the values in `include/secrets.h`
+
+### Wi-Fi Credential Table (SSID Scan List)
+The Wi-Fi manager expects an SSID table implementation for scan-based connects.
+Create `lib/WiFi_Manager/wifi_credentials.cpp` from the template in `lib/WiFi_Manager/examples/wifi_credentials_template.cpp` and fill in your SSIDs and passwords. This file is gitignored in most setups; do not commit secrets.
 
 ### Build-Time IR Pipeline Selection
 Set `USE_ACU_ADAPTER` in `include/secrets.h`:
@@ -75,6 +80,10 @@ Define hidden SSID credentials in `include/secrets.h`:
 Define NTP servers in `include/secrets.h`:
 - `NTP_SERVER_1`
 - `NTP_SERVER_2`
+Time sync is fixed to UTC+8 in `lib/NTP/NTP.cpp`.
+
+## Code Conventions
+See `CONVENTIONS.md` for naming rules, logging behavior, and review guidance.
 
 ## MQTT Usage
 ### Subscribe Topic (Commands)
@@ -91,6 +100,7 @@ STATE_PATH/DEFINED_FLOOR/DEFINED_ROOM/DEFINED_UNIT/identity
 STATE_PATH/DEFINED_FLOOR/DEFINED_ROOM/DEFINED_UNIT/deployment
 STATE_PATH/DEFINED_FLOOR/DEFINED_ROOM/DEFINED_UNIT/diagnostics
 STATE_PATH/DEFINED_FLOOR/DEFINED_ROOM/DEFINED_UNIT/metrics
+STATE_PATH/DEFINED_FLOOR/DEFINED_ROOM/DEFINED_UNIT/error
 ```
 
 ### JSON Payload Schema
@@ -139,6 +149,13 @@ Notes:
 Missing required fields cause the command to be rejected.
 Out-of-range values are accepted but encoded to protocol defaults (e.g., unknown temperatures or louver positions map to the encoder defaults).
 
+### Telemetry Fields (Summary)
+- `identity`: `device_id`, `mac_address`, `acu_remote_model`, `room_type_id`, `department`
+- `deployment`: `ip_address`, `version_hash`, `build_timestamp`, `reset_reason`
+- `diagnostics`: `status`, `last_seen_ts`, `last_cmd_ts`, `wifi_rssi`, `free_heap`
+- `metrics`: uptime counters, connection stats, command failure counts, heap stats, MQTT publish failures
+- `error`: error context snapshots when enabled by logging thresholds
+
 ### Example Publish (mosquitto_pub)
 ```bash
 mosquitto_pub -t control_path/floor_id/room_id/acu_id -m '{
@@ -149,6 +166,23 @@ mosquitto_pub -t control_path/floor_id/room_id/acu_id -m '{
   "power": true
 }'
 ```
+
+### MQTT Errors and Return Codes
+When an MQTT connection attempt fails, the firmware logs an `rc` value. This `rc` is the return code from `PubSubClient::state()` and is defined by the PubSubClient library (see `PubSubClient.h` in that library).
+
+Return codes:
+- `-4`: `MQTT_CONNECTION_TIMEOUT`
+- `-3`: `MQTT_CONNECTION_LOST`
+- `-2`: `MQTT_CONNECT_FAILED`
+- `-1`: `MQTT_DISCONNECTED`
+- `0`: `MQTT_CONNECTED`
+- `1`: `MQTT_CONNECT_BAD_PROTOCOL`
+- `2`: `MQTT_CONNECT_BAD_CLIENT_ID`
+- `3`: `MQTT_CONNECT_UNAVAILABLE`
+- `4`: `MQTT_CONNECT_BAD_CREDENTIALS`
+- `5`: `MQTT_CONNECT_UNAUTHORIZED`
+
+In this firmware, the `rc` value is emitted in `reconnectMQTT()` in `src/mqtt.cpp`.
 
 ## Mitsubishi Heavy ACU Protocol
 The IR protocol is tailored to Mitsubishi Heavy FDE71VNXVG ACUs.
