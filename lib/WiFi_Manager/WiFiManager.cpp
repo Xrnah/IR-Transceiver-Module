@@ -2,27 +2,32 @@
 
 #include "WiFiManager.h"
 #include "MQTT.h"
+#include "logging.h"
+
+namespace {
+constexpr const char* k_log_tag = "WIFI";
+} // namespace
 
 CustomWiFi::WiFiManager::WiFiManager()
-    : currentState(CustomWiFi::WiFiState::IDLE),
-      lastAttemptTime(0),
-      retryCount(0) {}
+    : current_state(CustomWiFi::WiFiState::IDLE),
+      last_attempt_time(0),
+      retry_count(0) {}
 
 void CustomWiFi::WiFiManager::saveWiFiToEEPROM(const char* ssid, const char* password) {
   EEPROM.begin(sizeof(StoredCredential));
   StoredCredential creds;
   // Read first to avoid unnecessary writes (flash wear leveling)
   EEPROM.get(0, creds);
-  if (creds.magic == EEPROM_MAGIC && 
-      strncmp(creds.ssid, ssid, SSID_MAX_LEN) == 0 && 
-      strncmp(creds.password, password, PASS_MAX_LEN) == 0) {
+  if (creds.magic == eeprom_magic && 
+      strncmp(creds.ssid, ssid, ssid_max_len) == 0 && 
+      strncmp(creds.password, password, pass_max_len) == 0) {
       EEPROM.end();
       return; 
   }
   
-  creds.magic = EEPROM_MAGIC;
-  strncpy(creds.ssid, ssid, SSID_MAX_LEN - 1);
-  strncpy(creds.password, password, PASS_MAX_LEN - 1);
+  creds.magic = eeprom_magic;
+  strncpy(creds.ssid, ssid, ssid_max_len - 1);
+  strncpy(creds.password, password, pass_max_len - 1);
   EEPROM.put(0, creds);
   EEPROM.commit();
   EEPROM.end();
@@ -34,9 +39,9 @@ bool CustomWiFi::WiFiManager::readWiFiFromEEPROM(char* ssid, char* password) {
   EEPROM.get(0, creds);
   EEPROM.end();
 
-  if (creds.magic == EEPROM_MAGIC && strlen(creds.ssid) > 0) {
-    strncpy(ssid, creds.ssid, SSID_MAX_LEN);
-    strncpy(password, creds.password, PASS_MAX_LEN);
+  if (creds.magic == eeprom_magic && strlen(creds.ssid) > 0) {
+    strncpy(ssid, creds.ssid, ssid_max_len);
+    strncpy(password, creds.password, pass_max_len);
     return true;
   }
   return false;
@@ -46,7 +51,7 @@ void CustomWiFi::WiFiManager::begin() {
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(false);
   if (WiFi.status() != WL_CONNECTED) {
-    currentState = CustomWiFi::WiFiState::DISCONNECTED;
+    current_state = CustomWiFi::WiFiState::DISCONNECTED;
   }
 }
 
@@ -58,29 +63,29 @@ void CustomWiFi::WiFiManager::begin(const char* ssid, const char* pass) {
 
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(false);
-  currentState = CustomWiFi::WiFiState::DISCONNECTED;
+  current_state = CustomWiFi::WiFiState::DISCONNECTED;
 }
 
 void CustomWiFi::WiFiManager::handleConnection() {
   
-  switch (currentState) {
+  switch (current_state) {
     case CustomWiFi::WiFiState::IDLE:
       break;
 
     case CustomWiFi::WiFiState::CONNECTED:
-      if (millis() - lastWiFiCheck > WIFI_CHECK_INTERVAL_MS) {
-        lastWiFiCheck = millis();
+      if (millis() - last_wifi_check > wifi_check_interval_ms) {
+        last_wifi_check = millis();
         if (WiFi.status() != WL_CONNECTED) {
-          Serial.println("📴 WiFi disconnected! Attempting reconnect...");
-          currentState = CustomWiFi::WiFiState::DISCONNECTED;
-          retryCount = 0;
+          logWarn(k_log_tag, "WiFi disconnected! Attempting reconnect...");
+          current_state = CustomWiFi::WiFiState::DISCONNECTED;
+          retry_count = 0;
           incrementWifiDisconnectCounter();
         }
       }
       break;
 
     case CustomWiFi::WiFiState::DISCONNECTED:
-      Serial.println("🔁 Starting connection process...");
+      logInfo(k_log_tag, "Starting connection process...");
       if (strlen(hidden_ssid) > 0) {
         startConnection(hidden_ssid, hidden_pass, CustomWiFi::WiFiState::CONNECTING_HIDDEN);
       } else {
@@ -109,13 +114,13 @@ void CustomWiFi::WiFiManager::handleConnection() {
 }
 
 void CustomWiFi::WiFiManager::trySavedCredentials() {
-  char savedSSID[SSID_MAX_LEN], savedPass[PASS_MAX_LEN];
+  char savedSSID[ssid_max_len], savedPass[pass_max_len];
   if (readWiFiFromEEPROM(savedSSID, savedPass)) {
-    Serial.printf("💾 Trying saved WiFi: %s\n", savedSSID);
+    logInfo(k_log_tag, "Trying saved WiFi: %s", savedSSID);
     startConnection(savedSSID, savedPass, CustomWiFi::WiFiState::CONNECTING_SAVED);
   } else {
-    Serial.println("No saved credentials. Queuing scan...");
-    currentState = CustomWiFi::WiFiState::START_SCAN;
+    logInfo(k_log_tag, "No saved credentials. Queuing scan...");
+    current_state = CustomWiFi::WiFiState::START_SCAN;
   }
 }
 
@@ -123,39 +128,38 @@ void CustomWiFi::WiFiManager::startConnection(const char* ssid, const char* pass
   WiFi.disconnect(); 
   yield(); // Feed WDT before intensive radio work
   WiFi.begin(ssid, password);
-  Serial.printf("\n🔌 Trying to connect to WiFi: %s\n", ssid);
-  currentState = nextState;
-  lastAttemptTime = millis();
+  logInfo(k_log_tag, "Trying to connect to WiFi: %s", ssid);
+  current_state = nextState;
+  last_attempt_time = millis();
 }
 
 void CustomWiFi::WiFiManager::checkConnectionProgress() {
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\n✅ WiFi connected.");
-    Serial.print("📡 IP Address: ");
-    Serial.println(WiFi.localIP());
+    logInfo(k_log_tag, "WiFi connected.");
+    logInfo(k_log_tag, "IP Address: %s", WiFi.localIP().toString().c_str());
 
     // Only save if we connected via a dynamic method (Scan or Hidden manual override)
-    if (currentState == CustomWiFi::WiFiState::CONNECTING_SCANNED || 
-        currentState == CustomWiFi::WiFiState::CONNECTING_HIDDEN) {
-      Serial.println("💾 Saving successful credentials to EEPROM...");
+    if (current_state == CustomWiFi::WiFiState::CONNECTING_SCANNED || 
+        current_state == CustomWiFi::WiFiState::CONNECTING_HIDDEN) {
+      logInfo(k_log_tag, "Saving successful credentials to EEPROM...");
       saveWiFiToEEPROM(WiFi.SSID().c_str(), WiFi.psk().c_str());
     }
 
-    currentState = CustomWiFi::WiFiState::CONNECTED;
-    retryCount = 0;
+    current_state = CustomWiFi::WiFiState::CONNECTED;
+    retry_count = 0;
     return;
   }
 
-  if (millis() - lastAttemptTime > WIFI_CONNECT_TIMEOUT_MS) {
-    Serial.println("\n❌ Connection attempt timed out.");
+  if (millis() - last_attempt_time > wifi_connect_timeout_ms) {
+    logWarn(k_log_tag, "Connection attempt timed out.");
     WiFi.disconnect();
     yield();
 
-    if (currentState == CustomWiFi::WiFiState::CONNECTING_SAVED) {
+    if (current_state == CustomWiFi::WiFiState::CONNECTING_SAVED) {
       // If saved creds failed, try scanning
-      currentState = CustomWiFi::WiFiState::START_SCAN;
+      current_state = CustomWiFi::WiFiState::START_SCAN;
     } else {
-      currentState = CustomWiFi::WiFiState::CONNECTION_FAILED;
+      current_state = CustomWiFi::WiFiState::CONNECTION_FAILED;
     }
   }
 }
@@ -167,17 +171,17 @@ bool CustomWiFi::WiFiManager::connectToHidden(const char* ssid, const char* pass
   strncpy(hidden_pass, pass ? pass : "", sizeof(hidden_pass) - 1);
   hidden_pass[sizeof(hidden_pass) - 1] = '\0'; // Ensure null-termination
   WiFi.mode(WIFI_STA);
-  currentState = CustomWiFi::WiFiState::DISCONNECTED;
+  current_state = CustomWiFi::WiFiState::DISCONNECTED;
   return true;
 }
 
 void CustomWiFi::WiFiManager::startScan() {
-  Serial.println("🔍 Starting async WiFi scan...");
+  logInfo(k_log_tag, "Starting async WiFi scan...");
   WiFi.mode(WIFI_STA);
   WiFi.disconnect();
   yield();
   WiFi.scanNetworks(true); // 'true' = ASYNC MODE. Returns immediately.
-  currentState = CustomWiFi::WiFiState::SCANNING;
+  current_state = CustomWiFi::WiFiState::SCANNING;
 }
 
 void CustomWiFi::WiFiManager::handleScanResult() {
@@ -186,12 +190,12 @@ void CustomWiFi::WiFiManager::handleScanResult() {
   if (n == WIFI_SCAN_RUNNING) return; // Still scanning, do nothing
 
   if (n < 0) {
-    Serial.println("❌ Scan failed.");
-    currentState = CustomWiFi::WiFiState::CONNECTION_FAILED;
+    logError(k_log_tag, "Scan failed.");
+    current_state = CustomWiFi::WiFiState::CONNECTION_FAILED;
     return;
   }
 
-  Serial.printf("🔍 Found %d networks.\n", n);
+  logInfo(k_log_tag, "Found %d networks.", n);
   
   int bestIndex = -1;
   int bestRSSI = -1000;
@@ -214,26 +218,26 @@ void CustomWiFi::WiFiManager::handleScanResult() {
   if (bestIndex != -1) {
     const char* ssid = wifiTable[bestIndex].ssid;
     const char* password = wifiTable[bestIndex].password;
-    Serial.printf("✅ Found strongest known SSID: %s (%d dBm)\n", ssid, bestRSSI);
+    logInfo(k_log_tag, "Found strongest known SSID: %s (%d dBm)", ssid, bestRSSI);
     startConnection(ssid, password, CustomWiFi::WiFiState::CONNECTING_SCANNED);
   } else {
-    Serial.println("❌ No known networks found.");
-    currentState = CustomWiFi::WiFiState::CONNECTION_FAILED;
+    logWarn(k_log_tag, "No known networks found.");
+    current_state = CustomWiFi::WiFiState::CONNECTION_FAILED;
   }
 }
 
 void CustomWiFi::WiFiManager::handleRetry() {
-  if (millis() - lastAttemptTime > WIFI_RETRY_DELAY_MS) {
-    retryCount++;
-    if (retryCount > 10) { 
-        Serial.println("🛑 Too many retries. Pausing...");
-        lastAttemptTime = millis() + 60000; // Wait 1 min
-        retryCount = 0;
+  if (millis() - last_attempt_time > wifi_retry_delay_ms) {
+    retry_count++;
+    if (retry_count > 10) { 
+        logWarn(k_log_tag, "Too many retries. Pausing...");
+        last_attempt_time = millis() + 60000; // Wait 1 min
+        retry_count = 0;
         return;
     }
     
-    Serial.printf("🔁 Retry attempt #%d\n", retryCount);
-    currentState = CustomWiFi::WiFiState::DISCONNECTED;
-    lastAttemptTime = millis();
+    logInfo(k_log_tag, "Retry attempt #%d", retry_count);
+    current_state = CustomWiFi::WiFiState::DISCONNECTED;
+    last_attempt_time = millis();
   }
 }

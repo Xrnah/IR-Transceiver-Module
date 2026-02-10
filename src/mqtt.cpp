@@ -4,6 +4,7 @@
 #include <ArduinoJson.h>
 #include <PubSubClient.h>
 #include <ESP8266WiFi.h>
+#include "logging.h"
 #include "secrets.h"
 #include "ACU_remote_encoder.h"
 #if USE_ACU_ADAPTER
@@ -68,6 +69,8 @@
 
 namespace {
 
+constexpr const char* k_log_tag = "MQTT";
+
 // =================================================================================
 // 1. CONFIGURATION & CONSTANTS
 // =================================================================================
@@ -100,6 +103,8 @@ constexpr uint8_t g_mqtt_qos = 1; // Quality of Service
 constexpr bool g_is_clean_session = false;
 constexpr unsigned long g_heartbeat_interval_ms = 15000; // 15 seconds
 constexpr unsigned long g_metrics_interval_ms = 120000;  // 120 seconds
+constexpr unsigned int g_mqtt_keepalive_s = 45;
+constexpr unsigned int g_mqtt_buffer_size = 512;
 
 // =================================================================================
 // 2. GLOBAL OBJECTS & STATE
@@ -125,6 +130,7 @@ char g_mqtt_topic_pub_identity[80];
 char g_mqtt_topic_pub_deployment[80];
 char g_mqtt_topic_pub_diagnostics[80];
 char g_mqtt_topic_pub_metrics[80];
+char g_mqtt_topic_pub_error[80];
 
 // MQTT Queue for ISR-safe decoupling
 struct MQTTQueueItem {
@@ -210,6 +216,8 @@ uint32_t g_heap_frag_cached = 0;
 // 3. INTERNAL UTILITIES
 // =================================================================================
 
+void publishMqttErrorContext(const char* error, const char* topic, const uint8_t* payload, unsigned int length, int rc);
+
 bool isTopicMatchingModule(char* topic) {
   return strcmp(topic, g_mqtt_topic_sub_unit) == 0;
 }
@@ -219,7 +227,7 @@ bool isTopicMatchingModule(char* topic) {
 // =================================================================================
 void publishACUState(const JsonObject& state_obj) {
   if (!g_mqtt_client.connected()) {
-    Serial.println("[MQTT] Not connected, skipping publish.");
+    logDebug(k_log_tag, "Not connected, skipping publish.");
     return;
   }
 
@@ -240,10 +248,10 @@ void publishACUState(const JsonObject& state_obj) {
 
   bool is_ok = g_mqtt_client.publish(g_mqtt_topic_pub_state, (const uint8_t*)g_state_pub_output, len, true); // retain = true
   if (is_ok) {
-    Serial.println("[MQTT] Published state:");
-    Serial.println(g_state_pub_output);
+    logInfo(k_log_tag, "Published state: %s", g_state_pub_output);
   } else {
-    Serial.println("[MQTT] Publish failed.");
+    logError(k_log_tag, "Publish failed.");
+    publishMqttErrorContext("publish_failed", g_mqtt_topic_pub_state, (const uint8_t*)g_state_pub_output, len, 0);
     g_mqtt_publish_failures++;
   }
 }
@@ -262,9 +270,9 @@ void publishIdentity() {
   doc["department"] = DEFINED_DEPARTMENT;
 
   char output[384];
-  if (doc.overflowed()) Serial.println("⚠ Identity JSON doc overflow");
+  if (doc.overflowed()) logWarn(k_log_tag, "Identity JSON doc overflow");
   size_t n = serializeJson(doc, output, sizeof(output));
-  if (n >= sizeof(output)) Serial.println("⚠ Identity output truncated");
+  if (n >= sizeof(output)) logWarn(k_log_tag, "Identity output truncated");
 
   g_mqtt_client.publish(g_mqtt_topic_pub_identity, output, true); // Retain identity info
   doc.clear();
@@ -284,9 +292,9 @@ void publishDeployment() {
 
   g_deployment_doc["reset_reason"] = ESP.getResetReason();
 
-  if (g_deployment_doc.overflowed()) Serial.println("⚠ Deployment JSON doc overflow");
+  if (g_deployment_doc.overflowed()) logWarn(k_log_tag, "Deployment JSON doc overflow");
   size_t n = serializeJson(g_deployment_doc, g_deployment_output, sizeof(g_deployment_output));
-  if (n >= sizeof(g_deployment_output)) Serial.println("⚠ Deployment output truncated");
+  if (n >= sizeof(g_deployment_output)) logWarn(k_log_tag, "Deployment output truncated");
   g_mqtt_client.publish(g_mqtt_topic_pub_deployment, g_deployment_output, true); // Retain deployment info
 
   g_deployment_doc.clear();
@@ -372,8 +380,53 @@ void publishMetrics() {
   g_metrics_doc.clear();
 
   // Optional debug
-  Serial.println("[MQTT] Metrics published:");
-  Serial.println(g_metrics_output);
+  logDebug(k_log_tag, "Metrics published: %s", g_metrics_output);
+}
+
+void publishMqttErrorContext(const char* error, const char* topic, const uint8_t* payload, unsigned int length, int rc) {
+#if LOG_LEVEL >= 3
+  const char* error_str = (error != nullptr) ? error : "unknown_error";
+  const char* topic_str = (topic != nullptr) ? topic : "n/a";
+  logError(k_log_tag, "Error context: %s (topic=%s rc=%d len=%u)", error_str, topic_str, rc, length);
+
+  if (!g_mqtt_client.connected()) return;
+
+  StaticJsonDocument<384> error_doc;
+  char time_buffer[30];
+  getTimestamp(time_buffer, sizeof(time_buffer));
+  error_doc["ts"] = time_buffer;
+  error_doc["error"] = error_str;
+  error_doc["broker"] = g_mqtt_server;
+  error_doc["port"] = g_mqtt_port;
+  if (topic != nullptr) error_doc["topic"] = topic;
+  if (rc != 0) error_doc["rc"] = rc;
+
+  if (payload != nullptr && length > 0) {
+    constexpr size_t k_payload_max = 128;
+    char payload_buf[k_payload_max];
+    size_t copy_len = (length < (k_payload_max - 1)) ? length : (k_payload_max - 1);
+    memcpy(payload_buf, payload, copy_len);
+    payload_buf[copy_len] = '\0';
+    error_doc["payload_len"] = length;
+    error_doc["payload"] = payload_buf;
+  }
+
+  char output[384];
+  size_t n = serializeJson(error_doc, output, sizeof(output));
+  bool is_ok = g_mqtt_client.publish(
+    g_mqtt_topic_pub_error,
+    (const uint8_t*)output,
+    n,
+    false
+  );
+  if (!is_ok) g_mqtt_publish_failures++;
+#else
+  (void)error;
+  (void)topic;
+  (void)payload;
+  (void)length;
+  (void)rc;
+#endif
 }
 
 
@@ -418,7 +471,8 @@ void handleReceivedCommand(char* topic, byte* payload, unsigned int length) {
   StaticJsonDocument<256> doc;
   DeserializationError err = deserializeJson(doc, payload, length);
   if (err) {
-    Serial.println("[MQTT] JSON parse failed");
+    logError(k_log_tag, "JSON parse failed: %s", err.c_str());
+    publishMqttErrorContext("json_parse_failed", topic, payload, length, 0);
     g_commands_failed_parse++;
     return;
   }
@@ -429,16 +483,16 @@ void handleReceivedCommand(char* topic, byte* payload, unsigned int length) {
   JsonObjectConst state_obj = doc.containsKey("state") ? doc["state"] : doc.as<JsonObjectConst>();
 
   if (!g_acu_remote.fromJSON(state_obj)) {
-    Serial.println("[MQTT] Invalid command structure.");
+    logError(k_log_tag, "Invalid command structure.");
+    publishMqttErrorContext("invalid_command_structure", topic, payload, length, 0);
     g_commands_failed_struct++;
     return;
   }
 
 #if USE_ACU_ADAPTER
-  Serial.print("[MQTT] JSON parsed. Adapter: ");
-  Serial.println(g_acu_adapter.name());
+  logDebug(k_log_tag, "JSON parsed. Adapter: %s", g_acu_adapter.name());
 #else
-  Serial.println("[MQTT] JSON parsed. Using legacy IR modulator.");
+  logDebug(k_log_tag, "JSON parsed. Using legacy IR modulator.");
 #endif
 
   yield(); // Allow ESP8266 background tasks
@@ -448,7 +502,8 @@ void handleReceivedCommand(char* topic, byte* payload, unsigned int length) {
   if (g_acu_adapter.send(g_acu_remote.getState())) {
     g_commands_executed_counter++;
   } else {
-    Serial.println("[MQTT] Failed to send IR command.");
+    logError(k_log_tag, "Failed to send IR command.");
+    publishMqttErrorContext("ir_send_failed", topic, payload, length, 0);
     g_commands_failed_ir++;
     return; // Stop processing this command
   }
@@ -456,11 +511,12 @@ void handleReceivedCommand(char* topic, byte* payload, unsigned int length) {
   // Legacy IR modulator path
   uint64_t command = g_acu_remote.encodeCommand();
   size_t len = 0;
-  if (parseBinaryToDurations(command, durations, len)) {
-    irsend.sendRaw(durations, len, 38);
+  if (parseBinaryToDurations(command, g_durations, len)) {
+    g_ir_send.sendRaw(g_durations, len, 38);
     g_commands_executed_counter++;
   } else {
-    Serial.println("[MQTT] Failed to parse command for IR sending.");
+    logError(k_log_tag, "Failed to parse command for IR sending.");
+    publishMqttErrorContext("ir_parse_failed", topic, payload, length, 0);
     g_commands_failed_ir++;
     return; // Stop processing this command
   }
@@ -501,18 +557,17 @@ void handleReceivedCommand(char* topic, byte* payload, unsigned int length) {
 
 }
 
-void processMqttQueue() {
+void processMQTTQueue() {
   while (g_mqtt_queue_head != g_mqtt_queue_tail) {
     // Process tail
     MQTTQueueItem* item = &g_mqtt_queue[g_mqtt_queue_tail];
 
-    Serial.print("[MQTT] Processing topic: ");
-    Serial.println(item->topic);
+    logDebug(k_log_tag, "Processing topic: %s", item->topic);
 
     if (isTopicMatchingModule(item->topic)) {
       handleReceivedCommand(item->topic, (byte*)item->payload, item->length);
     } else {
-      Serial.println("[MQTT] Topic rejected by filter.");
+      logDebug(k_log_tag, "Topic rejected by filter.");
     }
 
     // Advance tail
@@ -521,7 +576,7 @@ void processMqttQueue() {
   }
 }
 
-void mqttCallback(char* topic, byte* payload, unsigned int length) {
+void handleMQTTCallback(char* topic, byte* payload, unsigned int length) {
   uint8_t next_head = (g_mqtt_queue_head + 1) % g_mqtt_queue_size;
   if (next_head != g_mqtt_queue_tail) {
     strncpy(g_mqtt_queue[g_mqtt_queue_head].topic, topic, sizeof(g_mqtt_queue[0].topic) - 1);
@@ -541,7 +596,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 // 6. CONNECTION MANAGEMENT (SETUP & LOOP)
 // =================================================================================
 
-void mqttReconnect() {
+void reconnectMQTT() {
   static unsigned long last_attempt_ms = 0;
   constexpr unsigned long retry_interval_ms = 10000;
 
@@ -551,7 +606,7 @@ void mqttReconnect() {
   if (now_ms - last_attempt_ms >= retry_interval_ms) {
     last_attempt_ms = now_ms;
 
-    Serial.print("[MQTT] Connecting... ");
+    logInfo(k_log_tag, "Connecting...");
     
     static char client_id[32];
     static bool is_id_init = false;
@@ -565,7 +620,7 @@ void mqttReconnect() {
     }
 
     if (g_mqtt_client.connect(client_id, g_mqtt_user, g_mqtt_pass, g_mqtt_topic_pub_diagnostics, g_mqtt_qos, true, g_lwt_message, g_is_clean_session)) {
-      Serial.println("connected.");
+      logInfo(k_log_tag, "Connected.");
       
       g_mqtt_connect_ts = millis();
       g_is_prev_mqtt_status = true;
@@ -575,22 +630,23 @@ void mqttReconnect() {
       g_mqtt_client.subscribe(g_mqtt_topic_sub_unit, g_mqtt_qos);
       publishOnReconnect();
     } else {
-      Serial.print("[MQTT] failed (rc=");
-      Serial.print(g_mqtt_client.state());
-      Serial.println("), retrying...");
+      int rc = g_mqtt_client.state();
+      logError(k_log_tag, "Connect failed (rc=%d), retrying...", rc);
+      publishMqttErrorContext("connect_failed", nullptr, nullptr, 0, rc);
     }
   }
 }
 
 } // namespace
 
-void setupMqttTopics() {
+void setupMQTTTopics() {
   snprintf(g_mqtt_topic_sub_unit,        sizeof(g_mqtt_topic_sub_unit),        "%s/%s/%s/%s",            g_control_root, g_floor_id, g_room_id, g_unit_id);
   snprintf(g_mqtt_topic_pub_state,       sizeof(g_mqtt_topic_pub_state),       "%s/%s/%s/%s/state",      g_state_root, g_floor_id, g_room_id, g_unit_id);
   snprintf(g_mqtt_topic_pub_identity,    sizeof(g_mqtt_topic_pub_identity),    "%s/%s/%s/%s/identity",   g_state_root, g_floor_id, g_room_id, g_unit_id);
   snprintf(g_mqtt_topic_pub_deployment,  sizeof(g_mqtt_topic_pub_deployment),  "%s/%s/%s/%s/deployment", g_state_root, g_floor_id, g_room_id, g_unit_id);
   snprintf(g_mqtt_topic_pub_diagnostics, sizeof(g_mqtt_topic_pub_diagnostics), "%s/%s/%s/%s/diagnostics", g_state_root, g_floor_id, g_room_id, g_unit_id);
   snprintf(g_mqtt_topic_pub_metrics,     sizeof(g_mqtt_topic_pub_metrics),     "%s/%s/%s/%s/metrics",    g_state_root, g_floor_id, g_room_id, g_unit_id);
+  snprintf(g_mqtt_topic_pub_error,       sizeof(g_mqtt_topic_pub_error),       "%s/%s/%s/%s/error",      g_state_root, g_floor_id, g_room_id, g_unit_id);
 }
 
 void updateConnectionStats() {
@@ -656,24 +712,24 @@ void updateConnectionStats() {
   g_heap_frag_cached = ESP.getHeapFragmentation();
 }
 
-void setupMqtt() {
+void setupMQTT() {
   g_mqtt_client.setServer(g_mqtt_server, g_mqtt_port);
-  g_mqtt_client.setCallback(mqttCallback);
-  g_mqtt_client.setKeepAlive(45); // 45 seconds
-  g_mqtt_client.setBufferSize(512); // For identity and metrics
+  g_mqtt_client.setCallback(handleMQTTCallback);
+  g_mqtt_client.setKeepAlive(g_mqtt_keepalive_s); // seconds
+  g_mqtt_client.setBufferSize(g_mqtt_buffer_size); // For identity and metrics
 #if USE_ACU_ADAPTER
   g_acu_adapter.begin();
 #endif
 }
 
-void handleMqtt() {
+void handleMQTT() {
   if (!g_mqtt_client.connected()) {
-    mqttReconnect();
+    reconnectMQTT();
     yield();
   } 
 
   g_mqtt_client.loop();
-  processMqttQueue();
+  processMQTTQueue();
   yield();
 
   publishHeartbeat();

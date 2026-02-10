@@ -1,4 +1,9 @@
 #include "ACU_remote_encoder.h"
+#include "logging.h"
+
+namespace {
+constexpr const char* k_log_tag = "ACU";
+} // namespace
 
 // Constructor: initialize with AC unit signature (e.g., brand/protocol type)
 ACURemote::ACURemote(String signature)
@@ -101,7 +106,7 @@ bool ACURemote::fromJSON(JsonObjectConst doc) {
       !doc["mode"].is<const char*>() ||
       !doc["louver"].is<uint8_t>() ||
       !doc["power"].is<bool>()) {
-    Serial.println("fromJSON: Invalid or missing fields.");
+    logError(k_log_tag, "Invalid or missing fields in command.");
     return false;
   }
 

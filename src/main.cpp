@@ -2,6 +2,7 @@
 
 // Initialized variables
 #include "secrets.h"
+#include "logging.h"
 
 // Fallback definition
 #ifndef HIDDEN_SSID
@@ -31,27 +32,25 @@
 // ─────────────────────────────────────────────
 // 📡 Configuration
 // ─────────────────────────────────────────────
-#if !USE_ACU_ADAPTER
-  #define kIrLedPin      4                       // IR LED GPIO pin
-  #define rawDataLength  133                     // Raw buffer size for IR pulse timing
-#endif
+constexpr const char* k_log_tag = "MAIN";
+constexpr unsigned long startup_delay_ms = 5000;
+constexpr unsigned long wifi_loop_delay_ms = 10;
 
 // DEBUG OPTIONS
-// #define DEBUG_MODE // Enables serial
-// #define DEBUG_IR_PRINT // Enables raw binary ACU instruction in serial
-// #define DEBUG_MODE_TIMER // Enables timed functions in loop
+// #define ENABLE_TIMER_ROUTINE
+// #define ENABLE_IR_DEBUG_INPUT // Enables raw binary ACU instruction via Serial (requires LOG_SERIAL_ENABLE and LOG_LEVEL > 1)
 
 // ─────────────────────────────────────────────
 // 🔧 Global Objects
 // ─────────────────────────────────────────────
 CustomWiFi::WiFiManager wifiManager;           // WiFi manager instance
 #if !USE_ACU_ADAPTER
-  IRsend irsend(kIrLedPin);                      // IR transmitter
-  uint16_t durations[rawDataLength];             // Pulse duration buffer
-  const IRProtocolConfig* selectedProtocol = &MITSUBISHI_HEAVY_64;
+  IRsend g_ir_send(ir_led_pin);                      // IR transmitter
+  uint16_t g_durations[raw_data_length];             // Pulse duration buffer
+  const IRProtocolConfig* g_selected_protocol = &k_mitsubishi_heavy_64;
 #endif
 
-#ifdef DEBUG_MODE_TIMER
+#if ENABLE_TIMER_ROUTINE
   volatile uint32_t lastTimerEvent = 0;
   const uint32_t timerInterval = 1000; // 1 second
 #endif
@@ -59,28 +58,29 @@ CustomWiFi::WiFiManager wifiManager;           // WiFi manager instance
 // 🛠️ Setup (runs once on boot)
 // ─────────────────────────────────────────────
 void setup() {
-  #ifdef DEBUG_MODE
+  #if LOG_SERIAL_ENABLE && (LOG_LEVEL > 1)
     Serial.begin(115200);
-    delay(5000); // Startup delay for serial debugging. This is skipped in release builds.
-    Serial.println("\n🔌 MCU Status: ON");
-    Serial.print("Reset reason: ");
-    Serial.println(ESP.getResetReason());
+    delay(startup_delay_ms); // Startup delay for serial debugging. This is skipped in release builds.
+    initLogging();
+    logInfo(k_log_tag, "MCU Status: ON");
+    String reset_reason = ESP.getResetReason();
+    logInfo(k_log_tag, "Reset reason: %s", reset_reason.c_str());
   #endif
   
 #if !USE_ACU_ADAPTER
-  irsend.begin();
+  g_ir_send.begin();
 #endif
 
   wifiManager.begin(HIDDEN_SSID, HIDDEN_PASS);
 
   while (WiFi.status() != WL_CONNECTED) {
     wifiManager.handleConnection(); // Let the state machine run
-    delay(10); // Small delay to prevent busy-waiting
+    delay(wifi_loop_delay_ms); // Small delay to prevent busy-waiting
   }
 
   // setupOTA();                  // Start OTA service
-  setupMqttTopics();          // Build MQTT topic strings
-  setupMqtt();                // Start MQTT client
+  setupMQTTTopics();          // Build MQTT topic strings
+  setupMQTT();                // Start MQTT client
   setupTime();                // Configure NTP
 }
 
@@ -93,25 +93,22 @@ void loop() {
   updateConnectionStats();
 
   if (WiFi.status() == WL_CONNECTED) {
-    handleMqtt();
+    handleMQTT();
   }
 
-  #ifdef DEBUG_MODE_TIMER
+  #if ENABLE_TIMER_ROUTINE
   uint32_t now = millis();
     if ((uint32_t)(now - lastTimerEvent) >= timerInterval) {
     lastTimerEvent = millis(); // Update the time of the last event
 
-    Serial.println("[TIMER] Periodic task executed.");
-    
-    // Task: Free heap monitor
-    Serial.print("Free Heap: ");
-    Serial.println(ESP.getFreeHeap());
+    logDebug(k_log_tag, "Periodic task executed.");
+    logDebug(k_log_tag, "Free heap: %u", ESP.getFreeHeap());
     
     }    
   #endif
 
   #if !USE_ACU_ADAPTER
-    #ifdef DEBUG_IR_PRINT
+    #ifdef ENABLE_IR_DEBUG_INPUT
     debugIRInput();           // Optional IR test via Serial input
     #endif
   #endif
