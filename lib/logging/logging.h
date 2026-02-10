@@ -15,8 +15,12 @@
   #endif
 #endif
 
-#ifndef LOG_MQTT_ERROR_CONTEXT_LEVEL
-  #define LOG_MQTT_ERROR_CONTEXT_LEVEL 3
+#ifndef LOG_MQTT_ERROR_CONTEXT_MIN_LOG_LEVEL
+  #ifdef LOG_MQTT_ERROR_CONTEXT_LEVEL
+    #define LOG_MQTT_ERROR_CONTEXT_MIN_LOG_LEVEL LOG_MQTT_ERROR_CONTEXT_LEVEL
+  #else
+    #define LOG_MQTT_ERROR_CONTEXT_MIN_LOG_LEVEL 3
+  #endif
 #endif
 
 enum class LogLevel : uint8_t {
@@ -31,7 +35,7 @@ enum class LogLevel : uint8_t {
  *
  * LOG_SERIAL_ENABLE controls Serial initialization.
  * LOG_LEVEL controls local log verbosity.
- * LOG_MQTT_ERROR_CONTEXT_LEVEL controls MQTT /error publishing threshold.
+ * LOG_MQTT_ERROR_CONTEXT_MIN_LOG_LEVEL controls MQTT /error publishing threshold.
  */
 void initLogging();
 

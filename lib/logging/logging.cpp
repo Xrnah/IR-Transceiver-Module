@@ -5,8 +5,9 @@
 
 namespace {
 
-constexpr size_t k_max_log_length = 256;
+constexpr size_t k_max_log_length = 512;
 bool g_is_logging_ready = false;
+static char g_log_message[k_max_log_length];
 
 const char* levelToString(LogLevel level) {
   switch (level) {
@@ -26,13 +27,12 @@ void logMessage(LogLevel level, const char* tag, const char* format, va_list arg
   if (!isLogEnabled(level)) return;
   if (!g_is_logging_ready) return;
 
-  char message[k_max_log_length];
-  vsnprintf(message, sizeof(message), format, args);
+  vsnprintf(g_log_message, sizeof(g_log_message), format, args);
 
   const char* level_str = levelToString(level);
   const char* tag_str = (tag != nullptr) ? tag : "GEN";
 
-  Serial.printf("[%s] [%s] %s\n", level_str, tag_str, message);
+  Serial.printf("[%s] [%s] %s\n", level_str, tag_str, g_log_message);
 }
 
 } // namespace
