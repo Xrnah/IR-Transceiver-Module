@@ -1,7 +1,7 @@
 /*
  * ACU_remote_encoder.h
  * 
- * Defines the ACU_remote class responsible for encoding and managing commands
+ * Defines the ACURemote class responsible for encoding and managing commands
  * for an Air Conditioning Unit (ACU) remote controller.
  * 
  * Features:
@@ -18,7 +18,7 @@
  * - Encapsulation of encoding logic ensures data integrity and prevents misuse.
  * 
  * Usage:
- * 1. Instantiate ACU_remote with a signature string matching the target AC brand.
+ * 1. Instantiate ACURemote with a signature string matching the target AC brand.
  * 2. Use setter methods or setState() to configure AC parameters.
  * 3. Call encodeCommand() to generate the latest encoded 64-bit command.
  * 4. Use toBinaryString() and toJSON() for debugging or data presentation.
@@ -55,15 +55,15 @@ typedef struct __attribute__((packed)) {
 } ACUState;
 
 
-// ====== Main Class: ACU_remote ======
+// ====== Main Class: ACURemote ======
 
-class ACU_remote {
+class ACURemote {
 public:
   // Constructor: specify protocol signature (e.g., brand identifier)
-  ACU_remote(String signature);
+  ACURemote(String signature);
 
   // === State Setters ===
-  void setfan_speed(uint8_t speed);
+  void setFanSpeed(uint8_t speed);
   void setTemperature(uint8_t temp);
   void setMode(ACUMode mode);
   void setLouver(uint8_t louver);
@@ -98,7 +98,7 @@ private:
 
   // === Encoding Helpers ===
   uint8_t encodeSignature() const;     // Brand-specific 4-bit identifier
-  uint8_t encodefan_speed() const;      // Fan speed encoding
+  uint8_t encodeFanSpeed() const;      // Fan speed encoding
   uint8_t encodeTemperature() const;   // Temperature encoding
   uint8_t encodeMode() const;          // Encodes mode + power state
   uint8_t encodeLouver() const;        // Louver encoding

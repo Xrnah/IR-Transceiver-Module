@@ -1,8 +1,7 @@
 // WiFiManager.cpp
 
 #include "WiFiManager.h"
-
-extern unsigned int wifi_disconnect_counter; // for MQTT.h metric
+#include "MQTT.h"
 
 CustomWiFi::WiFiManager::WiFiManager()
     : currentState(CustomWiFi::WiFiState::IDLE),
@@ -75,7 +74,7 @@ void CustomWiFi::WiFiManager::handleConnection() {
           Serial.println("📴 WiFi disconnected! Attempting reconnect...");
           currentState = CustomWiFi::WiFiState::DISCONNECTED;
           retryCount = 0;
-          wifi_disconnect_counter++;
+          incrementWifiDisconnectCounter();
         }
       }
       break;

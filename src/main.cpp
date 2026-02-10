@@ -79,8 +79,8 @@ void setup() {
   }
 
   // setupOTA();                  // Start OTA service
-  setupMQTTTopics();          // Build MQTT topic strings
-  setupMQTT();                // Start MQTT client
+  setupMqttTopics();          // Build MQTT topic strings
+  setupMqtt();                // Start MQTT client
   setupTime();                // Configure NTP
 }
 
@@ -93,7 +93,7 @@ void loop() {
   updateConnectionStats();
 
   if (WiFi.status() == WL_CONNECTED) {
-    handleMQTT();
+    handleMqtt();
   }
 
   #ifdef DEBUG_MODE_TIMER
