@@ -5,6 +5,11 @@
 
 namespace {
 constexpr const char* k_log_tag = "WIFI";
+
+void formatIpAddress(char* buf, size_t len, const IPAddress& ip) {
+  if (buf == nullptr || len == 0) return;
+  snprintf(buf, len, "%u.%u.%u.%u", ip[0], ip[1], ip[2], ip[3]);
+}
 } // namespace
 
 CustomWiFi::WiFiManager::WiFiManager()
@@ -134,7 +139,9 @@ void CustomWiFi::WiFiManager::startConnection(const char* ssid, const char* pass
 void CustomWiFi::WiFiManager::checkConnectionProgress() {
   if (WiFi.status() == WL_CONNECTED) {
     logInfo(k_log_tag, "WiFi connected.");
-    logInfo(k_log_tag, "IP Address: %s", WiFi.localIP().toString().c_str());
+    char ip_buffer[16];
+    formatIpAddress(ip_buffer, sizeof(ip_buffer), WiFi.localIP());
+    logInfo(k_log_tag, "IP Address: %s", ip_buffer);
 
     // Only save if we connected via a dynamic method (Scan or Hidden manual override)
     if (current_state == CustomWiFi::WiFiState::CONNECTING_SCANNED || 
