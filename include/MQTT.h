@@ -30,8 +30,3 @@ void updateConnectionStats();
  * @brief Disconnect MQTT client if connected.
  */
 void mqttDisconnect();
-
-/**
- * @brief Increment WiFi disconnect counter (used by WiFiManager).
- */
-void incrementWifiDisconnectCounter();

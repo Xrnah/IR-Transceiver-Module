@@ -1,7 +1,6 @@
 // WiFiManager.cpp
 
 #include "WiFiManager.h"
-#include "MQTT.h"
 #include "logging.h"
 
 namespace {
@@ -79,7 +78,6 @@ void CustomWiFi::WiFiManager::handleConnection() {
           logWarn(k_log_tag, "WiFi disconnected! Attempting reconnect...");
           current_state = CustomWiFi::WiFiState::DISCONNECTED;
           retry_count = 0;
-          incrementWifiDisconnectCounter();
         }
       }
       break;
