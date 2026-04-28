@@ -15,16 +15,21 @@
 // ----------------------------------------------------------------
 // 1. IR SEND PIPELINE (build-time selection)
 // ----------------------------------------------------------------
-// 1 = use IRremoteESP8266 adapters (MHI88/MHI152)
+// 2 = use IRremoteESP8266 adapter (MHI152)
+// 1 = use IRremoteESP8266 adapter (MHI88)
 // 0 = use raw IR modulator (based on PJA502A704AA remote)
 #define USE_ACU_ADAPTER 1
 
 // Model string reported in identity messages
 // Example values: "MHI_64", "MHI_88", "MHI_152"
-#if USE_ACU_ADAPTER
+#if USE_ACU_ADAPTER == 1
   #define ACU_REMOTE_MODEL "MHI_88"
-#else
+#elif USE_ACU_ADAPTER == 2
+  #define ACU_REMOTE_MODEL "MHI_152"
+#elif USE_ACU_ADAPTER == 0
   #define ACU_REMOTE_MODEL "MHI_64"
+#else
+  #error "USE_ACU_ADAPTER must be 0 (raw), 1 (MHI88), or 2 (MHI152)."
 #endif
 
 

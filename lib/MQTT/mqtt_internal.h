@@ -16,6 +16,13 @@
 #include "ACU_remote_encoder.h"
 #if USE_ACU_ADAPTER
   #include "ACU_ir_adapters.h"
+  #if USE_ACU_ADAPTER == 1
+    using ACUAdapterT = MHI88Adapter;
+  #elif USE_ACU_ADAPTER == 2
+    using ACUAdapterT = MHI152Adapter;
+  #else
+    #error "USE_ACU_ADAPTER must be 0 (raw), 1 (MHI88), or 2 (MHI152)."
+  #endif
 #else
   #include "ACU_IR_modulator.h"
 #endif
@@ -111,7 +118,7 @@ extern WiFiClient g_esp_client;
 extern PubSubClient g_mqtt_client;
 extern ACURemote g_acu_remote;
 #if USE_ACU_ADAPTER
-extern MHI88Adapter g_acu_adapter;
+extern ACUAdapterT g_acu_adapter;
 #endif
 
 extern const char* g_mqtt_server;

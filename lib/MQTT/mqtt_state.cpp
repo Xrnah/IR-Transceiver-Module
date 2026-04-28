@@ -34,8 +34,8 @@ WiFiClient g_esp_client;
 PubSubClient g_mqtt_client(g_esp_client);
 ACURemote g_acu_remote(ACURemoteSignature::MitsubishiHeavy64);
 #if USE_ACU_ADAPTER
-  // IR adapter selection (switch to MHI152Adapter if needed)
-  MHI88Adapter g_acu_adapter;
+  // IR adapter selection (see USE_ACU_ADAPTER in secrets.h)
+  ACUAdapterT g_acu_adapter;
 #endif
 
 // MQTT topic buffers

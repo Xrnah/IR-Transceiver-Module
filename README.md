@@ -190,7 +190,8 @@ Create `include/secrets.h` from the template:
   
 ### Build-Time IR Pipeline Selection
 Set `USE_ACU_ADAPTER` in `include/secrets.h`:
-- `1` = use IRremoteESP8266 adapters (MHI88/MHI152)
+- `2` = use IRremoteESP8266 adapter (MHI152)
+- `1` = use IRremoteESP8266 adapter (MHI88)
 - `0` = use raw IR modulator (evidently based on PJA502A704AA remote)
 
 The reported identity model string is `ACU_REMOTE_MODEL`.

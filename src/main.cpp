@@ -18,7 +18,8 @@
 #endif
 
 // IR send default pipeline selection
-// 1 = use protocol adapters (IRremoteESP8266)
+// 2 = use IRremoteESP8266 adapter (MHI152)
+// 1 = use IRremoteESP8266 adapter (MHI88)
 // 0 = use legacy raw IR modulator (64-bit custom)
 #ifndef USE_ACU_ADAPTER
   #define USE_ACU_ADAPTER 0
